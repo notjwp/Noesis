@@ -9,7 +9,7 @@
 #
 #   git clone https://github.com/notjwp/Noesis.git && cd Noesis && sh scripts/install.sh
 #
-# A CHECKOUT, not a package: `noesis update` is `git pull` in this tree, so a
+# A CHECKOUT, not a package: `noesis --update` is `git pull` in this tree, so a
 # `pip install git+...` would install something that cannot update itself.
 # Editable, so the pull IS the update. Idempotent: run it again after a pull
 # and pip reports the requirements already satisfied.
