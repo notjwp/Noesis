@@ -795,6 +795,49 @@ def test_a_finished_run_leaves_no_spinner_behind():
 
 # ===================================================== ask_user, on this surface
 
+def test_the_approval_modal_offers_allow_for_the_session():
+    """The CLI's [s]ession keystroke, as a third button. It answers "session",
+    which the run loop treats as allow AND remembers - the modal itself stays
+    a question with one answer, like the CLI prompt."""
+    from textual.widgets import Button
+
+    from agent.ui.modals import ApprovalScreen
+
+    class Asked(screens.NoesisApp):
+        def __init__(self):
+            super().__init__(FakeGraph(), thread="t")
+            self.answer = "UNSET"
+
+    app = Asked()
+    payload = {"call": {"id": "t1", "name": "run_shell", "input": {"command": "rm -rf build"}},
+               "reason": "run_shell is destructive (recursive delete)"}
+
+    async def script(pilot):
+        app.push_screen(ApprovalScreen(payload),
+                        callback=lambda r: setattr(app, "answer", r))
+        await pilot.pause()
+        app.screen.query_one("#session", Button).press()
+        await pilot.pause()
+
+    drive(app, script)
+    assert app.answer == "session"
+
+
+def test_a_remembered_rule_does_not_open_the_modal_again():
+    """cli.remembered() is the same memory the CLI uses, so an allow given in
+    the TUI holds in the CLI for the rest of the process and vice versa."""
+    from agent import cli
+
+    cli.forget_approvals()
+    payload = {"call": {"id": "t1", "name": "run_shell", "input": {"command": "rm -rf build"}},
+               "reason": "run_shell is destructive (recursive delete)"}
+    assert cli.remembered(payload) is False
+    cli.remember(payload)
+    assert cli.remembered(payload) is True
+    other = {**payload, "reason": "run_shell is destructive (force push)"}
+    assert cli.remembered(other) is False
+
+
 def test_the_ask_modal_returns_what_was_typed():
     from agent.ui.modals import AskScreen
 

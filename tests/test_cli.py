@@ -21,7 +21,7 @@ def answers(monkeypatch, *replies):
 
 PAUSE = {"call": {"id": "t1", "name": "run_shell",
                   "input": {"command": "rm -rf build", "timeout": 120}},
-         "reason": "run_shell classified destructive"}
+         "reason": "run_shell is destructive (recursive delete)"}
 
 
 # ==================================================================== approval
@@ -46,6 +46,42 @@ def test_quit_is_distinct_from_deny(monkeypatch):
     assert cli.QUIT != "deny" and cli.QUIT != "allow"
 
 
+def test_session_keystroke_allows_and_remembers_the_rule(monkeypatch):
+    """[s]ession: allow this, and every later call the SAME RULE pauses on,
+    until the process ends. Asking the same question twice trains people to
+    answer without reading - and then to turn the gate off."""
+    cli.forget_approvals()
+    remaining = answers(monkeypatch, "s")
+    assert cli.ask_human(PAUSE) == "allow"
+    assert remaining == []
+    # The same rule again: answered from memory, no keystroke consumed.
+    again = {"call": {"id": "t2", "name": "run_shell", "input": {"command": "rm -rf dist"}},
+             "reason": PAUSE["reason"]}
+    assert cli.ask_human(again) == "allow"
+
+
+def test_a_remembered_approval_covers_one_rule_not_the_tool(monkeypatch):
+    """Allowing `rm -rf` for the session must not allow `git push --force`.
+    The key is the rule the gate named, not the tool that tripped it."""
+    cli.forget_approvals()
+    answers(monkeypatch, "s")
+    cli.ask_human({"call": {"id": "t1", "name": "run_shell", "input": {"command": "rm -rf build"}},
+                   "reason": "run_shell is destructive (recursive delete)"})
+    remaining = answers(monkeypatch, "d")
+    verdict = cli.ask_human({"call": {"id": "t2", "name": "run_shell",
+                                      "input": {"command": "git push --force"}},
+                             "reason": "run_shell is destructive (force push)"})
+    assert verdict == "deny" and remaining == [], "a different rule must still ask"
+
+
+def test_plain_allow_is_not_remembered(monkeypatch):
+    cli.forget_approvals()
+    answers(monkeypatch, "a")
+    assert cli.ask_human(PAUSE) == "allow"
+    remaining = answers(monkeypatch, "d")
+    assert cli.ask_human(PAUSE) == "deny" and remaining == []
+
+
 def test_unrecognised_input_reprompts_rather_than_guessing(monkeypatch):
     """NFR-801: one keystroke resolves it - but only a RECOGNISED one. A typo
     must never be read as consent."""
@@ -68,7 +104,7 @@ def test_prompt_shows_every_argument_in_full(monkeypatch, capsys):
     answers(monkeypatch, "d")
     cli.ask_human({"call": {"id": "t1", "name": "run_shell",
                             "input": {"command": "rm -rf " + "deep/" * 40}},
-                   "reason": "run_shell classified destructive"})
+                   "reason": "run_shell is destructive (recursive delete)"})
     shown = capsys.readouterr().out
     assert "rm -rf " + "deep/" * 40 in shown
     assert "..." not in shown

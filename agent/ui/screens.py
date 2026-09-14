@@ -699,9 +699,12 @@ class WorkspaceScreen(Screen):
                 # plan waiting to be adopted. Told apart by the payload, the
                 # same way cli.ask_human does it.
                 planning = "plan" in paused
-                answer = app.call_from_thread(
-                    app.push_screen_wait,
-                    PlanScreen(paused) if planning else ApprovalScreen(paused))
+                if not planning and cli.remembered(paused):
+                    answer = "allow"         # approved for this session already
+                else:
+                    answer = app.call_from_thread(
+                        app.push_screen_wait,
+                        PlanScreen(paused) if planning else ApprovalScreen(paused))
                 if answer == cli.QUIT:
                     app.call_from_thread(
                         self.note, "stopped, still checkpointed", "row--muted")
@@ -712,7 +715,9 @@ class WorkspaceScreen(Screen):
                     resume = "accept" if answer == "accept" else "revise"
                 else:
                     # Anything that is not an explicit allow is a refusal.
-                    resume = "allow" if answer == "allow" else "deny"
+                    if answer == "session":
+                        cli.remember(paused)
+                    resume = "allow" if answer in ("allow", "session") else "deny"
                 out = self.app.graph.invoke(Command(resume=resume), cfg)
         except Exception as exc:                       # noqa: BLE001
             # A provider error, a rate limit, a dead MCP server. Textual would

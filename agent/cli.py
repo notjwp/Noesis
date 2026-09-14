@@ -159,6 +159,32 @@ def ask_question(question: str, choices: list[str]) -> str:
     return answer
 
 
+# Approvals remembered for this PROCESS, keyed by (tool, the rule the gate
+# named). Here and not in classify(): the gate is pure (FR-305) and re-runs on
+# resume, so memory anywhere upstream of it would be consulted twice. Asking the
+# same question twice trains people to answer without reading, then to turn
+# the gate off. Hardline refusals never reach here - they are not a question.
+_APPROVED: set[tuple[str, str]] = set()
+
+
+def _rule_key(payload: dict) -> tuple[str, str]:
+    """The tool and the rule, with the unattended suffix stripped."""
+    reason = str(payload.get("reason", "")).split(";", 1)[0].strip()
+    return (payload["call"]["name"], reason)
+
+
+def remembered(payload: dict) -> bool:
+    return _rule_key(payload) in _APPROVED
+
+
+def remember(payload: dict) -> None:
+    _APPROVED.add(_rule_key(payload))
+
+
+def forget_approvals() -> None:
+    _APPROVED.clear()
+
+
 def ask_human(payload: dict) -> str:
     """Render a paused call and read one keystroke (FR-306, NFR-801).
 
@@ -167,6 +193,9 @@ def ask_human(payload: dict) -> str:
     """
     if "plan" in payload:
         return ask_plan(payload)
+    if remembered(payload):
+        print(f"\n  allowed: {payload.get('reason', '')} (approved for this session)")
+        return "allow"
 
     call = payload["call"]
     print(f"\n  +-- APPROVAL NEEDED {'-' * 42}")
@@ -180,19 +209,22 @@ def ask_human(payload: dict) -> str:
 
     while True:
         try:
-            answer = input("    [a]llow  [d]eny  [q]uit > ").strip().lower()
+            answer = input("    [a]llow  [s]ession  [d]eny  [q]uit > ").strip().lower()
         except EOFError:
             # No terminal attached. Silence is not consent.
             print("deny (no terminal)")
             return "deny"
         if answer in ("a", "allow"):
             return "allow"
+        if answer in ("s", "session"):
+            remember(payload)
+            return "allow"
         if answer in ("d", "deny"):
             return "deny"
         if answer in ("q", "quit"):
             return QUIT
         # Anything unrecognised re-asks. A mistyped key must never read as yes.
-        print("    unrecognised - answer a, d or q")
+        print("    unrecognised - answer a, s, d or q")
 
 
 # -------------------------------------------------------------------- session

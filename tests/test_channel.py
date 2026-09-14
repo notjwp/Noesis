@@ -561,6 +561,17 @@ def test_diagnose_reports_every_precondition(channel, monkeypatch, tmp_path):
         assert expected in blob, expected
 
 
+def test_diagnose_says_what_the_boundary_is(channel, monkeypatch, tmp_path):
+    """Tools run on this machine. Nothing else in the output says so, and a
+    person who assumes the eval's sandbox is around them is wrong in a way
+    that matters. Informational (--), not a FAIL: it is the design."""
+    from agent import channel as ch
+
+    line = next((l for l in ch.diagnose() if "policy gate" in l), None)
+    assert line is not None, "doctor does not say what the boundary is"
+    assert line.startswith("--"), line
+
+
 def test_diagnose_FAILS_on_a_missing_workspace(channel, monkeypatch, tmp_path):
     from agent import config
 

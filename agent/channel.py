@@ -331,6 +331,10 @@ def diagnose() -> list[str]:
     root = config.WORKSPACE
     lines.append(f"ok    workspace {root}" if root.is_dir()
                  else f"FAIL  workspace {root} does not exist")
+    # Said here because nothing else says it: the sandbox belongs to the eval
+    # harness, and on this machine the policy gate is the whole boundary.
+    lines.append("--    sandbox none: tools run on this machine; the policy gate "
+                 "is the boundary. Writes outside the workspace ask first")
 
     try:
         with worker._connect() as conn:

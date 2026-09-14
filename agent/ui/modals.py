@@ -44,6 +44,7 @@ class ApprovalScreen(ModalScreen[str]):
             yield Label(f"Reason: {self._payload.get('reason', '')}", classes="why")
             with Horizontal(id="approval-buttons"):
                 yield Button("Allow", id="allow", variant="error")
+                yield Button("Allow for session", id="session", variant="error")
                 yield Button("Deny", id="deny", variant="primary")
                 yield Button("Quit", id="quit")
 
@@ -54,7 +55,7 @@ class ApprovalScreen(ModalScreen[str]):
 
     @on(Button.Pressed)
     def _pressed(self, event: Button.Pressed) -> None:
-        self.dismiss({"allow": "allow", "deny": "deny",
+        self.dismiss({"allow": "allow", "session": "session", "deny": "deny",
                       "quit": cli.QUIT}[event.button.id])
 
     def action_refuse(self) -> None:
