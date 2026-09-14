@@ -143,7 +143,7 @@ def test_every_path_argument_is_checked(tmp_workspace):
 #
 # When a path outside the workspace stopped being refused, DANGER became the
 # only thing between the model and the filesystem. Every command below passed
-# the old list. Categories from the reference implementation/tools/approval.py.
+# the old list.
 
 @pytest.mark.parametrize("command", [
     "mv ~/Documents /tmp",                        # a wipe with a different verb

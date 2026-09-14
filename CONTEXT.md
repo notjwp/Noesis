@@ -606,8 +606,8 @@ exists.
       shared rare words with its target and keyword sufficed. A personal
       agent's memory is not worded that way: "how do I like my morning drink"
       retrieves nothing for "I take my coffee black, no sugar".
-    This reopens the GATE, not the design. Vellum's four-lane shape measured
-    1/6 and a dense lane alone 3/6; both stay rejected. A single lane fused
+    This reopens the GATE, not the design. A four-lane fusion measured 1/6
+    and a dense lane alone 3/6; both stay rejected. A single lane fused
     with keyword must move recall@3 on THIS corpus or it reverts.
 
   FR-302 vs what this actually is            ADDED 2026-09-08
@@ -633,9 +633,8 @@ exists.
       - anything that can WRITE outside is `confirm` in interactive mode and
         `deny` in autonomous mode, which is how `confirm` already degrades
     FR-302's INTENT - no silent writes outside the declared root - survives
-    intact. Its mechanism moves from refusal to consent, which is where the reference implementation
-    puts it too: approval modes manual / smart / off, and no OS sandbox around
-    tool execution anywhere in its 127k lines.
+    intact. Its mechanism moves from refusal to consent - approval, not an OS
+    sandbox around tool execution.
     NFR-201 keeps its wording FOR THE SCORED SUITE, where the container is
     real and the claim is measured. It no longer describes interactive use,
     and pretending otherwise would be the defaulted-AGENT_EGRESS mistake
@@ -831,9 +830,8 @@ overruns its estimate by more than double, stop and reduce scope.
     127.0.0.1, serving only what is ALREADY recorded - eval/runs rows, traces,
     task and schedule state. It may not start, stop, approve or configure
     anything: every mutating path stays in the CLI and TUI, so the gate remains
-    the only way a side effect happens. The reference implementation's
-    web_server.py is 19,279 lines because it also does auth, dashboards, model
-    switching and plugin management; those are still non-goals. If the viewer
+    the only way a side effect happens. Auth, dashboards, model switching and
+    plugin management are still non-goals. If the viewer
     ever needs a write path, this amendment is reopened rather than stretched.
   - Voice (FR-704 is explicitly [W]).
   - A general-purpose plugin marketplace or dynamic tool loading.
@@ -865,7 +863,7 @@ re-argue a decision that has already been measured.
     pyproject.toml     dependencies, package metadata
     Containerfile      sandbox image
     NOTICE             third-party attribution, when any code is derived
-    .gitignore         must include .agent/ and the reference checkout
+    .gitignore         must include .agent/
     README.md          baseline and current numbers table
     agent/
       __init__.py
@@ -960,9 +958,9 @@ re-argue a decision that has already been measured.
                        model verbatim - measured, not feared. Its own file
                        because it is a curated PATTERN LIST rather than logic,
                        and mixing 40 issuer regexes into context.py would bury
-                       shrink(). The reference implementation's list, their redactor deliberately NOT
-                       vendored: applied to source it destroys type annotations
-                       (`spent_tokens: int` -> `spent_tokens: ***`).
+                       shrink(). A pattern list only, deliberately not a
+                       NAME=value redactor: applied to source that destroys type
+                       annotations (`spent_tokens: int` -> `spent_tokens: ***`).
       skills.py        agentskills.io loading, and extraction at finish
       channel.py       A STATED DEVIATION, created 2026-09-02. Email intake and
                        delivery (IMAP in, SMTP out), so the agent is something
@@ -983,9 +981,9 @@ re-argue a decision that has already been measured.
                        mailbox being yours.
 
                        A message maps to a TASK and a task id IS a thread id,
-                       so no second identity space exists - Vellum's runtime is
-                       171k lines largely because delivery, sessions and
-                       identity grew up separately there. Channels were never a
+                       so no second identity space exists - a runtime where
+                       delivery, sessions and identity grow up separately ends
+                       up carrying all three twice. Channels were never a
                        stated non-goal; 11 lists voice, marketplaces, vector
                        search, fine-tuning and Windows-native only.
       provider.py      earned by a SECOND implementation: Anthropic plus any

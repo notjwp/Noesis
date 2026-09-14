@@ -38,8 +38,7 @@ def redact(text: str) -> str:
     return secrets.scrub(text)
 
 
-# Lone surrogates. From the reference implementation's message sanitisation, which states the
-# consequence: they are invalid in UTF-8 and crash json.dumps() inside the SDK.
+# Lone surrogates: invalid in UTF-8, and they crash json.dumps() inside the SDK.
 _SURROGATE = re.compile("[" + chr(0xD800) + "-" + chr(0xDFFF) + "]")
 
 

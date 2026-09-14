@@ -55,9 +55,8 @@ CODE_MARKERS = ("pyproject.toml", "setup.py", "setup.cfg", "requirements.txt",
 def is_code_workspace() -> bool:
     """Whether to add the coding brief. Deterministic - no model call.
 
-    The reference implementation selects a ContextProfile the same way and injects a coding brief only
-    in that posture; ours is two files instead of a profile registry because we
-    have two postures and they have a plugin system.
+    Two files instead of a profile registry, because there are two postures and
+    the brief is injected only in one of them.
 
     Why this matters here, measured: SOUL.md opened with "You fix broken code"
     and was sent on EVERY task - including the recall cases where the user states
@@ -328,8 +327,8 @@ def gate(state: AgentState, config: RunnableConfig) -> dict:
 
 
 # Warn BEFORE killing. reflect ends a run silently at REPEAT_LIMIT; the model
-# is never told it is looping and cannot correct. The reference implementation warns on the 2nd
-# identical call and blocks later, which is the half Cycle D left behind.
+# is never told it is looping and cannot correct. Warn on the 2nd identical
+# call and block later - the half Cycle D left behind.
 WARN_AFTER = 2
 
 
@@ -466,8 +465,8 @@ def reflect(state: AgentState, config: RunnableConfig | None = None) -> dict:
         return {"verdict": "continue"}
 
     if state["turns"] >= state["max_turns"]:
-        # One last turn to say what it found, then stop. The reference implementation injects the same
-        # request rather than ending silently.
+        # One last turn to say what it found, then stop, rather than ending
+        # silently.
         #
         # THE VERDICT STAYS `stuck`, and that is deliberate. A summary does not
         # change the workspace and the check command reads the workspace, so this
@@ -525,9 +524,8 @@ def reflect(state: AgentState, config: RunnableConfig | None = None) -> dict:
                 "truncated": False,
                 # REFUNDED. The reply was cut off mid-sentence, so this turn
                 # bought no completed thought - charging for it spends the cap on
-                # the output limit rather than on work. The reference implementation does the same
-                # (iteration_budget.refund() beside api_call_count -= 1) for the
-                # turns its retries throw away. Never below zero.
+                # the output limit rather than on work. A retry that threw a turn
+                # away refunds it. Never below zero.
                 "turns": max(0, state["turns"] - 1),
                 "messages": state["messages"] + [
                     {"role": "user", "content": TRUNCATED_HINT}],
@@ -540,20 +538,19 @@ def reflect(state: AgentState, config: RunnableConfig | None = None) -> dict:
 
 
 # A run that edits and then stops without running the tests has not finished,
-# it has narrated. The reference implementation injects a message and continues rather than ending;
-# ours does the same, bounded, and only when AGENT_VERIFY_ON_STOP is on.
+# it has narrated. Inject a message and continue rather than ending - bounded,
+# and only when AGENT_VERIFY_ON_STOP is on.
 VERIFY_HINT = (
     "[You edited a file but have not run the tests since. Run them now - "
     "`run_shell(command='pytest -q')` - and fix what fails. If you cannot "
     "verify, say what is blocking you rather than stopping here.]")
 
 
-# Adapted from the reference implementation _LENGTH_CONTINUATION_OUTPUT_LIMIT. It adds the one thing
-# their wording does not need and ours does: our budget is spent on visible
-# reasoning, so the way to finish is to call a tool rather than think further.
-# Asked once when the turn cap is reached. The reference implementation's wording, which is careful to
-# forbid further tools - a request for a summary that invites another tool call
-# just spends the turn it was given.
+# Our budget is spent on visible reasoning, so the way to finish is to call a
+# tool rather than think further.
+# Asked once when the turn cap is reached. Careful to forbid further tools - a
+# request for a summary that invites another tool call just spends the turn it
+# was given.
 CAP_SUMMARY_REQUEST = (
     "[You have reached the maximum number of tool-calling turns. Give a final "
     "answer summarising what you found and what you changed, and what is still "

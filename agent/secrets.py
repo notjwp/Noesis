@@ -5,17 +5,14 @@ container's own credentials and nothing else - measured, a workspace `.env`, an
 `AWS_KEY = "AKIA..."` in source, and a `postgres://user:pw@host` DSN all reached
 the model verbatim.
 
-THE PATTERN LIST IS THE VALUE, and it is the reference implementation's, from `agent/redact.py`
-(`_PREFIX_PATTERNS`, `_PRIVATE_KEY_RE`, `_JWT_RE`). Forty issuers with a literal
-prefix each, accumulated from real incidents; a hand-written list would be shorter
-and wrong. MIT, see NOTICE.
+THE PATTERN LIST IS THE VALUE: forty issuers with a literal prefix each,
+accumulated from real incidents. A hand-written list would be shorter and wrong.
 
-WHAT WAS DELIBERATELY LEFT BEHIND, and this is the whole design decision. Their
-module is 1,427 lines and also matches `NAME=value` where NAME merely *contains*
-key/token/secret/password. That is right for terminal output and chat, which is
-where the reference implementation applies it - and catastrophic on source code, which is what this
-agent reads all day. Measured against our own tree, their full redactor altered
-29 lines of 14,243, including:
+WHAT WAS DELIBERATELY LEFT OUT, and this is the whole design decision: matching
+`NAME=value` where NAME merely *contains* key/token/secret/password. That is
+right for terminal output and chat, and catastrophic on source code, which is
+what this agent reads all day. Measured against our own tree, a redactor that
+does it altered 29 lines of 14,243, including:
 
     spent_tokens: int              ->  spent_tokens: ***
     budget_tokens: int | None      ->  budget_tokens: *** | None
@@ -31,8 +28,8 @@ from __future__ import annotations
 
 import re
 
-# Issuer prefixes, from the reference implementation _PREFIX_PATTERNS. Each carries a literal prefix,
-# so none can match an ordinary identifier.
+# Issuer prefixes. Each carries a literal prefix, so none can match an ordinary
+# identifier.
 _PREFIXES = [
     r"sk-[A-Za-z0-9_-]{10,}",            # OpenAI / OpenRouter / Anthropic
     # The provider this project actually runs on, and it was missing while

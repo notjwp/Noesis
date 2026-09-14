@@ -830,9 +830,9 @@ def code_version() -> dict:
     and every manifest here claimed a clean tree - the same shape as AGENT_EGRESS
     defaulting to "restricted" where nothing ever set it.
 
-    NOT `git status --porcelain`: measured at 30s in the container because the
-    repo carries the reference checkout (928 MB) and vellum-assistant-main (128 MB), and git
-    stats them even to decide they are ignored. Asking about tracked and untracked
+    NOT `git status --porcelain`: measured at 30s in the container when the
+    tree carried a gitignored 1 GB of third-party checkouts, which git stats
+    even to decide they are ignored. Asking about tracked and untracked
     separately costs about 7s - though `diff` alone has been measured from 7s to
     36s depending on cache state, because eval/fixtures holds six vendored
     repositories and every tracked file must be stat-ed over a bind mount. The

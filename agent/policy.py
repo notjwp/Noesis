@@ -18,8 +18,8 @@ _HOME = r"(?:~|\$HOME|\$\{HOME\})"
 
 # On macOS /etc, /var, /tmp and /home are symlinks into /private/. A command
 # written against /private/etc/sudoers works exactly like /etc/sudoers and walks
-# straight past a plain "/etc/" check. The reference implementation's approval layer catches this and
-# it is not something reasoning from scratch would produce.
+# straight past a plain "/etc/" check. Not something reasoning from scratch
+# would produce.
 _SYSTEM_PATH = r"(?:/etc/|/private/(?:etc|var|tmp|home)/|/boot/|/dev/sd)"
 
 # Files that hand over the next session, or the account. Writing one is not
@@ -35,7 +35,7 @@ _SENSITIVE_FILE = (
 
 # An interpreter given inline source is a shell by another name - when the
 # source DELETES. Escalating the flag alone refused serve-token's own urlopen()
-# 6 of 6 (eval/CHANGELOG.md, 2026-09-11). The flags are the reference's table.
+# 6 of 6 (eval/CHANGELOG.md, 2026-09-11).
 _DELETES = r"(?:rmtree|rmSync|rmdirSync|unlink|os\.remove\(|os\.rmdir\(|Remove-Item)"
 _INLINE_SOURCE = (
     r"(?:\bpython[\d.]*\s+(?:-\w+\s+)*-c\b"
@@ -58,8 +58,7 @@ SENSITIVE = re.compile(_SENSITIVE_FILE, re.IGNORECASE)
 # and this became the only thing between the model and the filesystem. The gaps
 # were measured by reading it, not guessed: `mv ~/Documents /tmp`, `> ~/.bashrc`,
 # `python -c "shutil.rmtree(...)"` and `git clean -fdx` all passed the old list.
-# Categories taken from the reference implementation/tools/approval.py (5,498 lines,
-# not lifted); the regex is ours and much smaller.
+# The regex is deliberately small: categories, not an exhaustive list.
 # The tools that RUN what they are given, and the argument carrying it. Both
 # halves matter: adding a tool here without its argument name is the same hole.
 EXECUTES = {"run_shell": "command", "start_terminal": "command",

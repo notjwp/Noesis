@@ -1,10 +1,9 @@
 """A read-only viewer for what this agent has already done.
 
 A STATED DEVIATION from section 12, created 2026-09-10, and section 11 was
-amended in writing before it (883b6fe) rather than reinterpreted. It exists
-because the request was for the reference implementation's web_server.py, which
-is 19,279 lines and 193-of-353 internal imports; this is the capability behind
-that request, sized for one person on one machine.
+amended in writing before it (883b6fe) rather than reinterpreted. The request
+was for a web dashboard; this is the capability behind that request, sized for
+one person on one machine.
 
 Three conditions came with the amendment, and they are the whole design:
 

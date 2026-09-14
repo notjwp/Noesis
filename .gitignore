@@ -17,10 +17,3 @@ __pycache__/
 *.egg-info/
 .venv/
 .pytest_cache/
-
-# A 928 MB third-party checkout kept out of the repository. The path is named
-# because a .gitignore rule has no other way to name it - removing this line
-# makes 928 MB committable. The directory itself, not its contents: a trailing
-# `/*` would leave the folder trackable, and it is only absent from
-# `git status` today because a nested .git makes git skip it.
-reference_copy/

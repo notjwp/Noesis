@@ -122,9 +122,8 @@ def openai_api_key() -> str:
 # constraint; the runs were starved on turns while being told to stop.
 #
 # 30 is derived, not picked: at ~4.4k tokens a turn the token budget binds around
-# turn 45, so 30 keeps BUDGET_TOKENS the real ceiling. The reference implementation caps a parent agent at
-# 500 (agent/iteration_budget.py) and Vellum at 200 (maxStepsPerSession); 12 was a
-# fixture-era cost control that outlived its reason.
+# turn 45, so 30 keeps BUDGET_TOKENS the real ceiling. Comparable agents cap a
+# parent at 200-500; 12 was a fixture-era cost control that outlived its reason.
 MAX_TURNS = 30
 BUDGET_TOKENS = 200_000
 
@@ -182,12 +181,9 @@ COMPACT_SUMMARY_MAX_CHARS = 4_000
 # DEFAULT ON since 2026-08-31, reversing Cycle K's "build it only once traces
 # show it is needed". The traces now show it, from 637 scored rows: of 98 runs
 # that declared `done` and failed, 31 never ran the tests at all and 15 edited
-# AFTER their last test run - 47% ended on an unverified change. The reference implementation ships
-# theirs off; we have the measurement they presumably did not.
-# OFF, which is what the reference implementation ships: its own config defaults sets
-# "verify_on_stop": False and TWO one-time migrations (config_migrations.py
-# _migrate_to_31/_32) turn it off on existing installs, because "the
-# verification narrative was more noise than signal". Measured here the same
+# AFTER their last test run - 47% ended on an unverified change.
+# The case for OFF is that the verification narrative can be more noise than
+# signal, and that has been true elsewhere. Measured here the same
 # way: on took dev 15/15 -> 12/15, with the stuck share 25% -> 47%.
 VERIFY_ON_STOP = _env("AGENT_VERIFY_ON_STOP", "off").strip().lower() not in (
     "0", "off", "false")
@@ -298,9 +294,9 @@ MEMORY_ENABLED = _env("AGENT_MEMORY", "on").strip().lower() not in (
 MEMORY_INJECT_CHARS = 1_500
 MEMORY_EPISODES = 3
 
-# Episodes older than this are down-ranked, never deleted (Phase 3.1). Taken
-# from the design Vellum applies per item kind - 30 days for an event, 90 for a
-# constraint, and NEVER for identity or preference. Ours has exactly two kinds
+# Episodes older than this are down-ranked, never deleted (Phase 3.1). Decay
+# per kind - 30 days for an event, 90 for a constraint, and NEVER for identity
+# or preference - is the usual shape. Ours has exactly two kinds
 # already: AGENT.md, which does not go through search() and so never decays, and
 # episodes, which are events. One window is therefore the honest first version.
 # Semantic recall (FR-408). MEASURED on eval/fixtures/recall-corpus.jsonl:

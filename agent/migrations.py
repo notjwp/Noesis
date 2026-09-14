@@ -10,10 +10,9 @@ That is not theoretical here. `episodes_fts` gained `tokenize='porter'` on
 while the code assumes porter. Two agents on the same commit, different retrieval,
 no error anywhere.
 
-The shape is Vellum's, not its scale - they carry 321 migrations because they have
-a product's history behind them, and this starts at 1.
+A numbered, append-only list that starts at 1.
 
-THE RULE THAT MAKES THIS SAFE, and it is the one their own numbering enforces:
+THE RULE THAT MAKES THIS SAFE, and it is the one the numbering enforces:
 a migration is identified by its POSITION and never re-ordered, never edited once
 released, and never conditional on what a table currently looks like. Inspecting
 the current shape is how two databases at the same version come to differ.
@@ -138,9 +137,8 @@ TASKS: list[tuple[str, list[str]]] = [
     (
         # v3: a task can arrive from a chat and owes it a reply, added 2026-09-02.
         #
-        # An outbound reply is a ROW WITH A STATE, not a function call. The reference implementation
-        # learned that the expensive way - gateway/delivery_ledger.py exists
-        # because a send that fails must not lose the message, and a poison row
+        # An outbound reply is a ROW WITH A STATE, not a function call: a send
+        # that fails must not lose the message, and a poison row
         # must not spin. `delivered_at` is that ledger at the size this project
         # needs: NULL means still owed, and `attempts` bounds the retry.
         "channel",

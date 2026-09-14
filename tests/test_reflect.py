@@ -102,8 +102,8 @@ def test_a1_the_compaction_cap_stops_a_loop():
 
 
 def test_b_turn_cap_asks_for_a_summary_first():
-    """Reaching the cap no longer ends the run silently. The reference implementation injects the same
-    request; a capped run otherwise records nothing about what it learned."""
+    """Reaching the cap no longer ends the run silently; a capped run otherwise
+    records nothing about what it learned."""
     out = reflect(state(turns=12))
 
     assert out["verdict"] == "continue"
@@ -456,9 +456,8 @@ def test_OFF_by_default_matching_what_the_reference_ships(monkeypatch):
 
     On took dev 15/15 -> 12/15, and the stuck share 25% -> 47%: the nudge spends
     turns, and add-endpoint has the least headroom (1/3 with it on, 3/3 with it
-    off). The reference implementation reached the same place from real use - config_defaults.py ships
-    verify_on_stop False and two migrations turn it off on existing installs,
-    because "the verification narrative was more noise than signal".
+    off). The verification narrative can be more noise than signal, and here it
+    measured that way.
 
     The trace evidence was real and the remedy was wrong: 47% of failures ended
     on an unverified edit, and asking mid-run cost more runs than it saved.

@@ -2,12 +2,10 @@
 
 The whole file rests on one decision - A MESSAGE MAPS TO A TASK, and a task id
 IS a thread id. Nothing here invents a second identity space, a second queue or a
-second liveness check; worker.py already has all three, and Vellum's runtime is
-171k lines largely because delivery, sessions and identity grew up separately
-there.
+second liveness check; worker.py already has all three. A runtime where delivery,
+sessions and identity grow up separately ends up carrying all three twice.
 
-Three designs are taken from the reference implementation's email adapter and none is lifted - theirs
-is 1,510 lines across six mail providers:
+Three designs, none of them lifted:
 
 - DEFAULT DENY on who may write (gateway/authz_mixin.py). The moment a message
   can arrive from outside the terminal, "who is asking" is a security question,
@@ -32,8 +30,8 @@ from agent import config, worker
 MAX_BODY = 8000
 
 # Past this many failed sends a reply is abandoned rather than retried forever.
-# The reference implementation caps attempts for the same reason: a poison row that cannot be
-# delivered must not occupy the sweep on every tick.
+# Capped because a poison row that cannot be delivered must not occupy the
+# sweep on every tick.
 MAX_ATTEMPTS = 5
 
 # IMAP flags the agent's own replies so a mail client that syncs them back into
@@ -49,16 +47,16 @@ class ChannelRefused(ChannelUnavailable):
     """The credentials were rejected. Retrying cannot help, so the loop stops.
 
     A SUBCLASS, so every existing handler still catches it and no row is lost -
-    only run_channel singles it out. The reference implementation marks the same failure
-    retryable=False because "bad or revoked credentials can never self-heal".
+    only run_channel singles it out. Not retryable, because bad or revoked
+    credentials can never self-heal.
     """
 
 
 # Only markers a server sends for a REJECTED LOGIN. Deliberately narrow: an
 # ambiguous error must stay retryable, because stopping on a transient one is a
-# listener that is off when it is most needed. The reference implementation classifies SMTP by type
-# and leaves IMAP4.error alone for exactly this reason - imaplib gives us only
-# the server text, so these are the unambiguous strings and nothing else.
+# listener that is off when it is most needed. SMTP is classified by exception
+# type; IMAP4.error is left alone because imaplib gives us only the server
+# text, so these are the unambiguous strings and nothing else.
 _REFUSED = ("authenticationfailed", "invalid credentials",
             "authenticate failed", "login failed")
 
@@ -314,9 +312,8 @@ def check() -> list[str]:
 def diagnose() -> list[str]:
     """Every precondition this agent needs, each line ok or FAIL.
 
-    The reference implementation's `doctor` is 3,151 lines because it covers ~25 providers; this covers
-    the two we have. The design is the part worth taking: ONE command that probes
-    every precondition rather than the one you happened to suspect.
+    ONE command that probes every precondition rather than the one you happened
+    to suspect. It covers the two providers we have and nothing more.
     """
     from agent import migrations, registry, worker
 

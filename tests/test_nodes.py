@@ -2740,8 +2740,8 @@ def test_the_line_delta_survives_alongside_the_diff(tmp_workspace):
 
 
 def test_an_edit_that_does_not_persist_raises(tmp_workspace, monkeypatch):
-    """A write that did not land must not report success. The reference implementation makes this a hard
-    error rather than a silent flag, and a silent flag is how a run spends its
+    """A write that did not land must not report success. A hard error rather
+    than a silent flag, because a silent flag is how a run spends its
     remaining turns building on a file that never changed."""
     from pathlib import Path
 
@@ -3052,7 +3052,7 @@ def test_auth_failure_outranks_the_retryable_table():
     with pytest.raises(ProviderMisconfigured):
         _reraise_classified(AuthenticationError("no key"))
 
-# ================================ binary and container-document guards (the reference implementation)
+# ================================ binary and container-document guards
 
 
 PNG_HEADER = bytes([0x89, 0x50, 0x4E, 0x47])
@@ -3250,7 +3250,7 @@ def test_search_files_still_finds_text_matches(tmp_workspace):
     (tmp_workspace / 'a.py').write_text('needle here' + chr(10), encoding='utf-8')
     assert 'a.py' in search_files('needle')
 
-# ================================ posture: one loop, two briefs (the reference implementation's design)
+# ================================ posture: one loop, two briefs
 
 
 def test_an_empty_workspace_is_not_a_code_workspace(tmp_workspace):
@@ -3528,8 +3528,8 @@ def test_a_transport_error_is_caught_by_its_TYPE_with_no_marker_in_the_message()
 
 
 def test_a_WRAPPED_transport_error_is_caught_by_its_MESSAGE():
-    """the reference implementation carries a type list AND a substring list because the exception can
-    arrive wrapped in something whose name no longer says transport."""
+    """A type list AND a substring list, because the exception can arrive
+    wrapped in something whose name no longer says transport."""
     class SomeWrapper(Exception):
         pass
 
@@ -3597,8 +3597,7 @@ def test_reading_a_real_file_outside_the_workspace_works(tmp_workspace, tmp_path
 # ===================================================== ask_user (FR-2xx, tool 1)
 
 def test_ask_user_returns_what_the_person_said(monkeypatch):
-    """The tool defines the schema; the INTERFACE does the asking. The reference implementation puts
-    the interaction in the platform layer for the same reason - a tool that
+    """The tool defines the schema; the INTERFACE does the asking. A tool that
     owned a prompt would work in one surface and hang in the others."""
     from agent import tools
 
@@ -3634,8 +3633,8 @@ def test_ask_user_passes_the_choices_through(monkeypatch):
 
 
 def test_ask_user_bounds_the_choice_list(monkeypatch):
-    """the reference implementation caps at 4. An unbounded list is a menu nobody reads, and it is
-    also unbounded schema-adjacent text in the transcript."""
+    """An unbounded list is a menu nobody reads, and it is also unbounded
+    schema-adjacent text in the transcript."""
     from agent import tools
 
     seen = {}
@@ -3831,8 +3830,7 @@ def test_a_finished_session_does_not_lose_the_readers_last_lines(tmp_workspace):
 
 
 def test_sessions_are_bounded(tmp_workspace):
-    """An agent that starts one per turn would hold the machine. The reference implementation bounds
-    its pool for the same reason."""
+    """An agent that starts one per turn would hold the machine."""
     import sys
 
     from agent import tools
@@ -4001,7 +3999,7 @@ def test_the_switch_parses_a_comma_list(monkeypatch):
         importlib.reload(config)
 
 
-# ======================================= url_is_safe, ported from the reference implementation (P)
+# ======================================= url_is_safe (P)
 
 import pytest
 

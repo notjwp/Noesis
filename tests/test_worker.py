@@ -134,8 +134,8 @@ def test_a_live_worker_keeps_its_task(queue):
 
 def test_a_dead_workers_task_is_requeued(queue):
     """A crashed worker leaves a row saying `running` forever. Requeued rather
-    than marked unknown - the reference implementation cannot retry because it does not know whether
-    side effects ran; this project checkpoints after every node and CE-07 keeps
+    than marked unknown - without checkpoints nothing could know whether side
+    effects ran; this project checkpoints after every node and CE-07 keeps
     gate and execute separate, so a resumed run re-classifies rather than
     re-executes."""
     task_id = worker.submit("goal")
@@ -548,8 +548,8 @@ def test_a_due_schedule_enqueues_exactly_one_task(tmp_workspace):
 
 
 def test_polling_again_in_the_same_slot_does_not_fire_twice(tmp_workspace):
-    """THE TRAP THIS ORDERING EXISTS FOR, and the reference implementation states it: next_run is
-    advanced BEFORE the submit. A worker polling every two seconds would
+    """THE TRAP THIS ORDERING EXISTS FOR: next_run is advanced BEFORE the
+    submit. A worker polling every two seconds would
     otherwise enqueue a task per poll for the whole minute."""
     import time
 

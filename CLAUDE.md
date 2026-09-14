@@ -67,8 +67,8 @@ Ordered by how often they have caught something.
 - **A transport error below the SDK is not a failed case.** A stream fails while it is
   ITERATED, after `create()` returned, so httpx raises through unwrapped and the SDK's
   error table never sees it. Measured: an interrupted run wrote `status: ok, turns 0,
-  tokens 0` and scored as a failure. Classify by type AND by message (the reference implementation does both
-  because the exception arrives wrapped) - but NOT by "has no HTTP status", because our
+  tokens 0` and scored as a failure. Classify by type AND by message, because the exception
+  arrives wrapped - but NOT by "has no HTTP status", because our
   own TypeError has none either and a masked bug costs more than a mis-scored row.
 - **A retryable classification with no retry behind it is a comment.** `RETRYABLE`
   listed five exception names and nothing ever made a second attempt; the SDK does not
@@ -79,13 +79,13 @@ Ordered by how often they have caught something.
 - **A guard built for a failure mode you saw once may never fire again.** `_noop_nudge`
   fired 0 times in 30 runs and `_drift_notice` 1 time in 15; both were reverted. Tested
   and mutation-checked is not measured.
-- **Rescaling a borrowed threshold is not porting it.** Vellum's exploration-drift uses
-  25 read-only calls in an unbounded turn; at 8 against our 13-turn cap it still never
-  fired, because `run_shell` ends the streak and this agent runs pytest every few calls.
+- **Rescaling a borrowed threshold is not porting it.** An exploration-drift detector built
+  for 25 read-only calls in an unbounded turn, rescaled to 8 against our 13-turn cap, still
+  never fired - `run_shell` ends the streak and this agent runs pytest every few calls.
   Check the SHAPE transfers, not just the number.
-- **Do not let a reference implementation pick your signal.** 0 edits in 13 calls
-  separated pass from fail 9 times out of 9 on `add-endpoint`; the detector shipped was
-  keyed on read-streak length because that is what theirs uses, and it measured nothing.
+- **Do not let a borrowed design pick your signal.** 0 edits in 13 calls separated pass
+  from fail 9 times out of 9 on `add-endpoint`; the detector shipped was keyed on
+  read-streak length because that is the conventional signal, and it measured nothing.
 
 - **Fixing one premature ending reveals the next.** Truncation ended runs at ~12 turns;
   fixing it exposed `MAX_SECONDS`; raising that exposed `BUDGET_TOKENS` at ~20 turns.
@@ -105,8 +105,8 @@ Ordered by how often they have caught something.
   real arms are 85.7% and 94.4% and the controls are 0% and 8.6% - the split was WORKING
   and the control was proving it. Check whether a split has an ablation before quoting it.
 - **MAX_TURNS was the binding failure, not the model.** 12 -> 30 took dev 13/15 -> 15/15
-  and eliminated `stuck` across 45 runs (25% historically). The reference implementation caps a parent at 500
-  (`agent/iteration_budget.py`), Vellum at 200. Before raising it, check the run is
+  and eliminated `stuck` across 45 runs (25% historically). Comparable agents cap a parent
+  at 200-500. Before raising it, check the run is
   STARVED: median spend was 42-54k of 200,000, so tokens never bound.
 
 - **Caps derived against one model are a confound when you swap the model.**
@@ -387,8 +387,7 @@ failure — `pass 4/13, 2 blocked`, never `pass 4/15`.
 ## Environment
 
 Execution is confined to a container on any host that runs one (§11; NFR-701 as amended). This
-machine is Windows 11 with Docker Desktop and Git Bash — not WSL2. `.agent/` and the reference checkout
-are gitignored.
+machine is Windows 11 with Docker Desktop and Git Bash — not WSL2. `.agent/` is gitignored.
 
 ## Say when it does not work
 

@@ -41,8 +41,7 @@ dev = ["pytest>=9,<10"]
 
 # The repository is a flat layout with four top-level directories, so setuptools
 # refuses to guess which is the package. Only `agent` ships: `eval` and
-# `prompts` are read from the source tree by path, and the reference checkout is
-# not ours to distribute.
+# `prompts` are read from the source tree by path.
 [tool.setuptools.packages.find]
 include = ["agent*"]
 

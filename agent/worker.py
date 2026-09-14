@@ -4,10 +4,8 @@
 here: the three requirements are `[M]`, and §9 puts scope in play once the `[M]`
 set passes evaluation, which it has.
 
-WHAT THIS IS NOT. The reference implementation's equivalent is `cron/scheduler.py`, 7,644 lines welded
-to a 13,732-line state module, and none of it can be lifted. What ports is
-`cron/executions.py` - 284 lines of stdlib and SQLite - and specifically two
-ideas from it, both of which are about not lying about state:
+WHAT THIS IS NOT: a scheduler welded to a state module. It is stdlib and
+SQLite, built on two ideas, both of which are about not lying about state:
 
   IDEMPOTENT TRANSITIONS.  `UPDATE ... WHERE id=? AND status='queued'` followed
   by `if cur.rowcount != 1: return None`. A transition applies exactly once and a
@@ -20,9 +18,10 @@ ideas from it, both of which are about not lying about state:
   and the next process to claim one would look like the original. The pair
   cannot be.
 
-WHERE THIS DELIBERATELY DIVERGES FROM THE REFERENCE IMPLEMENTATION. It marks an abandoned execution
-`unknown` and refuses to retry, on the ground that "whether side effects ran is
-unknown". That is correct for the reference implementation and wrong here: this project checkpoints
+THE DIVERGENCE FROM THE USUAL DESIGN. The usual design marks an abandoned
+execution `unknown` and refuses to retry, on the ground that whether side
+effects ran is unknown. That is correct without checkpoints and wrong here:
+this project checkpoints
 after every node transition and CE-07 keeps `gate` and `execute` separate
 precisely so a resumed run cannot re-fire a tool. An abandoned task therefore
 goes back to `queued`, and the worker that picks it up RESUMES from the
@@ -72,8 +71,8 @@ def _alive(pid: int | None, started: float | None) -> bool:
     """Whether the process that claimed a task is still running.
 
     FAILS SAFE: inability to prove death must not rewrite someone else's row.
-    The reference implementation's rule, and the reason is that the alternative - assuming death when
-    unsure - hands the same task to two workers.
+    The alternative - assuming death when unsure - hands the same task to two
+    workers.
     """
     if pid is None:
         return False
@@ -196,8 +195,9 @@ def cancel(task_id: str) -> dict | None:
 def recover() -> int:
     """Requeue tasks whose worker died. Returns how many.
 
-    The reference implementation marks these `unknown` and does NOT retry, because it cannot know
-    whether side effects ran. This project can: state is checkpointed after every
+    Without checkpoints these would have to be marked `unknown` and never
+    retried, because nothing could know whether side effects ran. This project
+    can: state is checkpointed after every
     node transition, and CE-07 keeps `gate` and `execute` separate so a resumed
     run re-classifies rather than re-executes. So the safe move here is `queued`,
     and the worker that picks it up resumes mid-task (FR-603).
@@ -283,8 +283,8 @@ FIELDS = ((0, 59), (0, 23), (1, 31), (1, 12), (0, 6))
 def _field(spec: str, low: int, high: int) -> set[int]:
     """The set of values one cron field matches.
 
-    Written rather than taken from croniter, which the reference implementation uses: pip.conf sets
-    no-index, so a library not baked into the image does not exist. Five fields
+    Written rather than taken from croniter: pip.conf sets no-index, so a
+    library not baked into the image does not exist. Five fields
     of `*`, `*/n`, `a-b` and `a,b` is the whole of standard cron syntax.
     """
     matched: set[int] = set()
@@ -363,8 +363,8 @@ def unschedule(sched_id: str) -> bool:
 def fire(now: float | None = None) -> list[str]:
     """Enqueue one task per schedule now due. Returns the task ids.
 
-    The reference implementation's ordering, and it is the whole correctness argument: next_run is
-    ADVANCED FIRST, guarded on the value just read, and only the writer whose
+    The ordering is the whole correctness argument: next_run is ADVANCED FIRST,
+    guarded on the value just read, and only the writer whose
     rowcount is 1 submits. Two workers polling the same second produce one task,
     not two, and a submit that follows cannot fire the same slot twice.
     """
@@ -445,8 +445,8 @@ def run_once(app, task: dict, trace: list | None = None) -> dict | None:
 def run_worker(app, once: bool = False, poll: float = 2.0) -> int:
     """Drain the queue, one task at a time (FR-602).
 
-    A loop over the graph this project already has, not a supervisor: ~40 lines
-    against the reference implementation's 7,644, because everything hard about running a task -
+    A loop over the graph this project already has, not a supervisor: ~40 lines,
+    because everything hard about running a task -
     checkpointing, the gate, budgets - is already in the graph.
 
     Schedules are polled here rather than run here: fire() enqueues through

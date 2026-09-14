@@ -715,8 +715,8 @@ MSYS_NO_PATHCONV=1 docker run --rm --network none -e AGENT_SKILLS=off -w /app \
 **Will:** an assistant with memory, real tools, self-written skills, and — unusually — numbers saying
 whether any of it works. A recall figure that rises. A reuse rate. A cost per session.
 
-**Will not:** the reference implementation. They have 40+ tools, seven execution backends, six chat surfaces and a funded
-team shipping while this is built. Matching that surface is not the goal, and pretending otherwise
+**Will not:** a general-purpose agent platform - 40+ tools, seven execution backends, six chat
+surfaces, a funded team. Matching that surface is not the goal, and pretending otherwise
 would be the same over-claim this project keeps having to retract.
 
 **The honest bet:** an assistant whose learning you can point at is worth more than one with more
