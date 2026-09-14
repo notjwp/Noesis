@@ -284,5 +284,5 @@ Recorded rather than papered over, per §0 and §8.2.
 
 Multi-user support, auth, tenancy · multi-agent orchestration and sub-agent spawning · a web UI ·
 voice (FR-704 is [W]) · a plugin marketplace or dynamic tool loading · vector search before keyword
-recall has been measured and found wanting · fine-tuning or local model hosting for the orchestrator
-· Windows-native support outside WSL2.
+recall has been measured and found wanting · fine-tuning or local model hosting for the orchestrator. Windows-native support outside WSL2 was
+a non-goal until 2026-09-14; it is now the development host.

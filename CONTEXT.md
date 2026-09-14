@@ -51,6 +51,10 @@ Three properties separate this from a chat wrapper with function calling:
 
 Target environment: Fedora Linux natively, Windows via WSL2. Execution is
 confined to a container with a single bind-mounted workspace directory.
+  AMENDED 2026-09-14: that sentence describes SCORED RUNS. Interactive use
+  runs natively on the host - Windows 11 without WSL2 included, which is where
+  this is developed - and the policy gate is the boundary. NFR-204, NFR-701
+  and 8.2 (FR-302) carry the detail.
 
 Success is measured, not asserted: a fixture suite of repo-repair tasks is run
 headlessly and scored by exit code. The pass rate is the project's headline
@@ -338,13 +342,13 @@ Only [M] items are in scope for the first build. See section 9.
                AMENDED 2026-09-08: outside is `confirm`, not `deny` - see 8.2.
                Rejection confined the wrong half; run_shell was never confined
                at all, and the interactive agent never ran in a container.
+  FR-303  [M]  Suspend execution and await human input on a confirm verdict in
+               interactive mode.
                AMENDED 2026-09-14: the interface may remember an approval for
                the rest of the PROCESS, keyed by (tool, the rule that fired).
                In the interface, never in classify(): FR-305 keeps the gate
                pure, and memory upstream of a resumable node is consulted
                twice. The reason string names the rule for exactly this.
-  FR-303  [M]  Suspend execution and await human input on a confirm verdict in
-               interactive mode.
   FR-304  [M]  Downgrade confirm to deny in autonomous mode and record the
                request for later review.
   FR-305  [M]  Evaluate policy with no side effects, so the node is safe to
@@ -490,6 +494,11 @@ A requirement without a number is not testable. Targets are the point.
                              minors, same pins. NOT demonstrated: "natively",
                              since §11 makes a container mandatory anyway, and
                              WSL2, which remains untested.
+                             AMENDED 2026-09-14: "natively" IS demonstrated,
+                             on Windows 11 with no WSL2 - the installer, the
+                             CLI, the TUI and Task Scheduler registration all
+                             run there, and that is the development host. The
+                             container is mandatory for scored runs only.
   NFR-702   Portability      Model provider swappable behind a single adapter
   NFR-703   Independence     No hosted service required for state; local SQLite
   NFR-801   Usability        Approval or rejection resolvable in one keystroke
@@ -858,9 +867,17 @@ overruns its estimate by more than double, stop and reduce scope.
     policy.register() records an unclassified tool as `destructive`, never
     `read`. Bounded by config.MAX_SCHEMA_CHARS. A marketplace, and run-time
     installation of a server, remain non-goals.
+    AMENDED 2026-09-14, for native use: (a) reads "declared in pyproject and
+    in config.MCP_SERVERS" - the agent starts only what that dict names, so a
+    server still cannot be introduced mid-run; (b) reads "a subprocess of the
+    agent, same user, its tools classified by the same gate". `fetch` is
+    `read`, like web_search; the egress allowlist bounds it in scored runs
+    and nothing does natively, which is said rather than assumed.
   - Vector search before keyword recall has been measured and found wanting.
   - Fine-tuning or local model hosting for the orchestrator.
   - Windows-native support outside WSL2.
+    AMENDED 2026-09-14: no longer a non-goal. It is the development host;
+    scripts/install-tasks.ps1 exists for it alone. See NFR-701.
 
 
 --------------------------------------------------------------------------------

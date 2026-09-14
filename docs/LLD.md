@@ -180,8 +180,9 @@ def run_shell(command: str, timeout: int = 120) -> str
   labelled** (FR-202).
 - Tools **raise** on failure. They never return an error string — `execute` owns the
   exception→observation conversion (FR-208).
-- Tools do **not** re-check paths. The gate checks declared path arguments; the container's single
-  writable mount bounds everything else. Two mechanisms guarding one risk is a CE-02 violation.
+- Tools do **not** re-check paths. The gate checks declared path arguments and is the boundary
+  (FR-302 as amended); in scored runs the container's single writable mount bounds everything else
+  as well. Two mechanisms guarding one risk is a CE-02 violation.
 
 **Numeric arguments are coerced at the boundary, via one `_int(value, default)` helper.** A declared
 JSON schema is a hint to the model, not enforcement: `timeout` arrived as `"120"` and crashed

@@ -8,10 +8,9 @@
 # Recorded here as well because the container installs by list, not by package,
 # and because two of the three groups below have no other declared home.
 #
-# The container is where the agent actually runs (Python 3.12). Installing these
-# on a host is only useful for editor IntelliSense - the host and the image are
-# separate environments, and running the agent outside the container is not a
-# supported configuration.
+# The agent installs natively (`sh scripts/install.sh`, which reads pyproject).
+# This list is for the CONTAINER, where scored runs happen: the image installs
+# by list, and the fixture group below has no other declared home.
 #
 #   pip install -r requirements.txt
 

@@ -1,14 +1,14 @@
-"""MCP client — a third party's tools, inside the sandbox, behind the same gate.
+"""MCP client — a third party's tools, as a subprocess, behind the same gate.
 
 §11's non-goal forbids "dynamic tool loading". Phase L amends it for servers that
 meet three conditions, and this module is where two of them are enforced:
 
-  1. Baked into the image at BUILD time. `/etc/pip.conf` sets no-index, so nothing
-     can be installed at run time - a server cannot be introduced mid-run.
-  2. Run INSIDE the sandbox. The server is a subprocess of the agent, so it
-     inherits the container's mounts and network namespace and Phase K's boundary
-     already contains it, with no new mechanism. A server on the host would have
-     host access and would make the container decorative.
+  1. Declared, never discovered: config.MCP_SERVERS names every server that may
+     start, and the package is pinned in pyproject - a server cannot be
+     introduced mid-run. In the eval image `/etc/pip.conf` sets no-index too.
+  2. A subprocess of the agent. Natively that is the same user with the same
+     access, and its tools go through the same gate as run_shell; in the eval
+     container it inherits the mounts and network namespace, no new mechanism.
   3. Every tool risk-classified BEFORE its schema is shown to the model, by
      policy.register(), which refuses to default an unclassified tool to `read`.
 

@@ -29,7 +29,7 @@ It is single-user, terminal-first, and built to be trusted with your own files:
 
 ## Install
 
-Python 3.12+ and git. One line:
+Python 3.12+ and git. No Docker, no VM, nothing else. One line:
 
 ```bash
 git clone https://github.com/notjwp/Noesis.git && cd Noesis && sh scripts/install.sh
@@ -146,9 +146,9 @@ Ten built-in tools, each with a declared risk the gate enforces:
 | `ask_user` | ask you a question when the goal is genuinely ambiguous | read |
 | `web_search` | look something up; keyless, no account needed | read |
 
-Plus `fetch` — a page as readable text — from an MCP server that runs inside the sandbox. Every
-tool output is capped before it reaches the model; anything larger is saved to disk and the model
-is told how to read the rest.
+Plus `fetch` — a page as readable text — from an MCP server the agent starts as a subprocess,
+behind the same gate. Every tool output is capped before it reaches the model; anything larger is
+saved to disk and the model is told how to read the rest.
 
 **What it will not do without asking:** delete recursively, force-push, `sudo`, write to `/etc` or
 your shell profile, read `.ssh` or `.env`, pipe the internet into a shell, or run a program through
@@ -193,15 +193,17 @@ every loop change since — which is recorded as flat, not as progress.
 
 ## Running the evaluation
 
+You do not need this section to use the agent. It is how the numbers above were produced.
+
 Scored runs happen inside a container — read-only code, two writable paths, no network except an
 allowlisting proxy to the model host — so that fifteen runs are fifteen independent runs and not
-fifteen that could see each other's files. The harness builds all of that itself. Docker is needed
-for this and for nothing else.
+fifteen that could see each other's files. The harness builds all of that itself. This is the one
+place Docker is needed.
 
 ```bash
 docker build -f Containerfile -t personal-agent .
 
-# 1,156 offline tests - no API key, no network
+# 1,192 offline tests - no API key, no network
 docker run --rm --network none --read-only --tmpfs /tmp:exec \
   -v "$PWD:/app:ro" -v "$PWD/eval/workspace:/workspace" \
   -v "$PWD/.agent/homes/_t:/state" personal-agent python -m pytest -q

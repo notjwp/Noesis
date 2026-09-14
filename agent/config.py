@@ -237,8 +237,8 @@ TAIL_LINES = 20
 MAX_SCHEMA_CHARS = 10_000
 
 # Declared rather than discovered: a server offering a tool absent from `risk`
-# gets it refused, never defaulted. Where fetch may go is bounded by the egress
-# allowlist, not by this classification.
+# gets it refused, never defaulted. fetch is `read` like web_search; the egress
+# allowlist bounds it in scored runs, and nothing does natively.
 MCP_SERVERS = {
     "fetch": {
         "command": ["python", "-m", "mcp_server_fetch"],

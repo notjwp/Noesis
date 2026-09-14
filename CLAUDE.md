@@ -9,8 +9,8 @@ table). Read those when you need history; do not copy history back into here.
 
 ## State
 
-`act -> gate -> execute -> reflect` over a two-provider adapter, kernel-enforced sandbox, CLI and
-Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,192 offline tests**, green with no API key, no network, a
+`act -> gate -> execute -> reflect` over a two-provider adapter, a policy gate that is the boundary
+(a kernel-enforced sandbox for scored runs only), CLI and Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,192 offline tests**, green with no API key, no network, a
 read-only root filesystem, and without the `mcp` package installed.
 
 | | |

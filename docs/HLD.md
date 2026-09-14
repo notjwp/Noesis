@@ -309,9 +309,11 @@ Logging lives in `execute`, never in `gate` — logging inside `gate` would viol
 
 ### Security
 
-Secrets never enter model context; env-var indirection plus output redaction (NFR-203). Execution is
-confined to a container whose only host mount is the workspace (NFR-204). Egress is disabled for the
-eval suite (NFR-205).
+Secrets never enter model context; env-var indirection plus output redaction (NFR-203). Scored runs
+are confined to a container whose only host mount is the workspace (NFR-204); interactive use runs
+natively and the policy gate is the boundary — a hardline tier no approval overrides, `destructive`
+that asks (NFR-204 and FR-301 as amended 2026-09-14). Egress is disabled for the eval suite
+(NFR-205).
 
 ### Cost
 
