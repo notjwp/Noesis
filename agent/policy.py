@@ -38,52 +38,81 @@ _SENSITIVE_FILE = (
 # 6 of 6 (eval/CHANGELOG.md, 2026-09-11).
 _DELETES = r"(?:rmtree|rmSync|rmdirSync|unlink|os\.remove\(|os\.rmdir\(|Remove-Item)"
 _INLINE_SOURCE = (
-    r"(?:\bpython[\d.]*\s+(?:-\w+\s+)*-c\b"
-    r"|\bnode\s+(?:-\w+\s+)*(?:-e|--eval|-p|--print)\b"
-    r"|\b(?:perl|ruby)\s+(?:-\w+\s+)*-e\b"
-    r"|\bphp\s+(?:-\w+\s+)*-r\b"
+    r"(?:\bpython[\d.]*\s+(?:-\w+\s+)*(?:-c\b|<<)"
+    r"|\bnode\s+(?:-\w+\s+)*(?:-e|--eval|-p|--print|<<)"
+    r"|\b(?:perl|ruby)\s+(?:-\w+\s+)*(?:-e\b|<<)"
+    r"|\bphp\s+(?:-\w+\s+)*(?:-r\b|<<)"
     r"|\bpowershell(?:\.exe)?\s+.*?-(?:command|c|file|f)\b)"
     rf"[\s\S]*?{_DELETES}"
 )
+
+# Read-only verbs with a flag that runs an arbitrary program. The verb is not
+# the risk; the flag is - and a verb allowlist would wave all four through.
+_EXEC_FLAG = (
+    r"\bsort\b[^|]*--compress-program"
+    r"|\brg\b[^|]*--pre\b"
+    r"|\bag\b[^|]*--pager\b"
+    r"|\bman\b[^|]*(?:\s-P\s|--pager|\s-H\s|--html)"
+)
+
+# Where a shell would begin parsing a NEW command, so `echo reboot` and
+# `grep shutdown log` are words and `ls; halt` is a command.
+_COMMAND_START = r"(?:^|[;&|(]\s*|\bsudo\s+)"
 
 # The same list as a standalone pattern, for PATH arguments. `cat ~/.ssh/id_rsa`
 # and read_file(path="~/.ssh/id_rsa") are the same act and must get the same
 # answer, which they did not while only run_shell was inspected.
 SENSITIVE = re.compile(_SENSITIVE_FILE, re.IGNORECASE)
 
-# Commands that must never run unreviewed. Matched against run_shell's command
-# string; a hit escalates the tool's declared risk to `destructive`.
-#
-# WIDENED 2026-09-08, when FR-302 stopped refusing paths outside the workspace
-# and this became the only thing between the model and the filesystem. The gaps
-# were measured by reading it, not guessed: `mv ~/Documents /tmp`, `> ~/.bashrc`,
-# `python -c "shutil.rmtree(...)"` and `git clean -fdx` all passed the old list.
-# The regex is deliberately small: categories, not an exhaustive list.
 # The tools that RUN what they are given, and the argument carrying it. Both
 # halves matter: adding a tool here without its argument name is the same hole.
 EXECUTES = {"run_shell": "command", "start_terminal": "command",
             "run_python": "code"}
 
-DANGER = re.compile(
-    r"\brm\s+(-\w+\s+)*-\w*[rf]"
-    r"|\bgit\s+push\b[^|]*--force"
-    r"|\bgit\s+reset\s+--hard\b"
-    r"|\bgit\s+clean\b[^|]*-\w*[fd]"
-    r"|\bsudo\b"
-    r"|\bmkfs(\.\w+)?\b"
-    r"|\bdd\s+if="
-    r"|\b(shutdown|reboot|halt|poweroff)\b"
-    r"|\bchmod\s+-R\s+777\b"
-    r"|\bcurl\b[^|]*\|\s*(ba)?sh\b"
+# Commands that must never run unreviewed. Matched against what EXECUTES names;
+# a hit escalates the tool's declared risk to `destructive`, and the RULE that
+# hit is in the reason, because the interface remembers approvals by rule.
+#
+# WIDENED 2026-09-08, when FR-302 stopped refusing paths outside the workspace
+# and this became the only thing between the model and the filesystem. The gaps
+# were measured by reading it, not guessed: `mv ~/Documents /tmp`, `> ~/.bashrc`,
+# `python -c "shutil.rmtree(...)"` and `git clean -fdx` all passed the old list.
+# Deliberately small: categories, not an exhaustive list.
+DANGER = [(name, re.compile(pattern, re.IGNORECASE)) for name, pattern in (
+    ("recursive delete", r"\brm\s+(-\w+\s+)*-\w*[rf]"),
+    ("force push", r"\bgit\s+push\b[^|]*--force"),
+    ("git reset --hard", r"\bgit\s+reset\s+--hard\b"),
+    ("git clean", r"\bgit\s+clean\b[^|]*-\w*[fd]"),
+    ("sudo", r"\bsudo\b"),
+    ("dd", r"\bdd\s+if="),
+    ("chmod 777", r"\bchmod\s+-R\s+777\b"),
+    ("curl piped to a shell", r"\bcurl\b[^|]*\|\s*(ba)?sh\b"),
     # moving or copying the home directory somewhere else is a wipe with a
     # different verb, and `mv` was absent from the list entirely
-    rf"|\b(?:mv|cp|rsync)\b[^|]*{_HOME}/"
-    rf"|{_SYSTEM_PATH}"
-    rf"|{_SENSITIVE_FILE}"
-    rf"|{_INLINE_SOURCE}"
+    ("moving the home directory", rf"\b(?:mv|cp|rsync)\b[^|]*{_HOME}/"),
+    ("a system path", _SYSTEM_PATH),
+    ("a credential file", _SENSITIVE_FILE),
+    ("inline source that deletes", _INLINE_SOURCE),
+    ("a program run by a read-only tool's flag", _EXEC_FLAG),
     # a redirect INTO anything sensitive, which no verb above would catch
-    rf"|>>?\s*{_HOME}/\."
-    , re.IGNORECASE)
+    ("a redirect into a dotfile", rf">>?\s*{_HOME}/\."),
+)]
+
+# Above `destructive`: refused with a person present, and no approval can allow
+# it. Saying "allow" trusts the agent with your files; it does not trust it to
+# wipe the disk or power the box off. Tiny, and only things with no recovery.
+HARDLINE = [(name, re.compile(pattern, re.IGNORECASE)) for name, pattern in (
+    ("deleting the root or home directory",
+     rf"\brm\s+(-\w+\s+)*-\w*[rf]\w*\s+(?:-\w+\s+)*(?:/\*?|{_HOME}/?)(?:\s|$)"),
+    ("writing a block device", r"(?:\bdd\b[^|]*\bof=|>\s*)/dev/(?:sd|nvme|hd|vd|mmcblk|disk)"),
+    ("formatting a filesystem", r"\bmkfs(?:\.\w+)?\b"),
+    ("shutting the machine down", rf"{_COMMAND_START}(?:shutdown|reboot|halt|poweroff)\b"),
+    ("a fork bomb", r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:"),
+)]
+
+
+def _first(rules, text: str) -> str | None:
+    return next((name for name, pattern in rules if pattern.search(text)), None)
 
 # The single source of a tool's risk and the single path through classify().
 # Built from tools.TOOLS so a new tool cannot be offered unclassified.
@@ -209,8 +238,12 @@ def classify(name: str, args: dict, autonomous: bool,
     # through run_shell while run_python ran X at `auto`. Measured 2026-09-10,
     # and the agent switched tools on its own. An escalation one tool enforces
     # and another ignores is not a boundary.
-    source = args.get(EXECUTES.get(name, ""), "")
-    if source and DANGER.search(str(source)):
+    source = str(args.get(EXECUTES.get(name, ""), "") or "")
+    hardline = _first(HARDLINE, source) if source else None
+    if hardline:
+        return "deny", f"{name} is {hardline}; refused, and no approval can allow it"
+    rule = _first(DANGER, source) if source else None
+    if rule:
         risk = "destructive"
 
     verdict = VERDICT_BY_RISK[risk]
@@ -231,9 +264,12 @@ def classify(name: str, args: dict, autonomous: bool,
         verdict = "confirm"
         return _unattended(verdict, autonomous,
                            f"{name} writes outside the workspace: {outside}")
+    # The rule in the reason, because the interface remembers approvals by it:
+    # "destructive" alone would let one allow cover every category.
+    what = f"{name} is {risk} ({rule})" if rule else f"{name} classified {risk}"
     if autonomous and verdict == "confirm":
-        return "deny", f"{name} is {risk}; denied in autonomous mode, queued for review"
-    return verdict, f"{name} classified {risk}"
+        return "deny", f"{what}; denied in autonomous mode, queued for review"
+    return verdict, what
 
 
 def _unattended(verdict: str, autonomous: bool, reason: str) -> tuple[str, str]:
