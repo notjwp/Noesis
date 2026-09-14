@@ -223,6 +223,24 @@ and reverted before the cheapest alternative — a different model on the same f
 frugal and was not; runs were cheap because the agent quit early. 27,852 tokens with 8–12 turns is
 what doing the work actually costs.
 
+## Installing it
+
+Python 3.12+ and git. One line, from anywhere:
+
+```bash
+git clone https://github.com/notjwp/Personal_Agent.git && cd Personal_Agent && sh scripts/install.sh
+```
+
+It installs into the active virtualenv if there is one, otherwise the user site — never the
+system Python — and ends by saying where `noesis` landed and whether that is on your PATH.
+Then `noesis`: the first run opens a setup wizard that probes your model endpoint before it
+writes a key. `noesis update` is a `git pull` in that checkout, which is why this is a
+checkout and not a `pip install` — a package could not update itself.
+
+Not `curl | sh`: the policy gate in `agent/policy.py` classifies that shape as destructive,
+and an installer this project ships should be one it would run. Read the script first if you
+like; it is under 90 lines.
+
 ## Running it
 
 ```bash

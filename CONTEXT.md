@@ -1064,6 +1064,16 @@ re-argue a decision that has already been measured.
                        broken thing looks healthy. Runs --doctor BEFORE
                        registering: a task that dies on start looks identical in
                        the UI to one that works.
+    scripts/install.sh A STATED DEVIATION, added 2026-09-14. The one-line
+                       install: clone (or install in place), pip -e into the
+                       active venv else the user site, then say where `noesis`
+                       landed and whether PATH reaches it. A checkout and not a
+                       package because `noesis update` is `git pull`; not
+                       `curl | sh` because agent/policy.py refuses that shape.
+                       Proven end to end in the suite (a fresh venv, offline,
+                       the build backend baked into the image for it) and by
+                       hand on Windows, where the first version installed into
+                       the Store alias's Python and reported a stale command.
     .agent/            RUNTIME STATE, gitignored
       artifacts/       spilled tool output. INSIDE the workspace, because the
                        model must be able to read a spill without tripping

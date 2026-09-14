@@ -61,6 +61,10 @@ RUN pip install --no-cache-dir "textual==8.0.1" "rich==14.3.3"
 # no-index, so nothing installs at run time.
 RUN pip install --no-cache-dir "ddgs==9.16.0"
 
+# The build backend pyproject declares, so the packaging - console script,
+# packages.find - can be installed and proven in the test suite with no index.
+RUN pip install --no-cache-dir "setuptools==80.9.0"
+
 # Semantic retrieval (FR-408). Built here, REVERTED once, and now REBUILT on a
 # corpus the first attempt did not have.
 #

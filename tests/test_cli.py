@@ -411,6 +411,65 @@ def test_the_noesis_command_points_at_the_entry_that_loads_env():
     assert target.group(1) == "agent.__main__:main"
 
 
+def test_the_installer_produces_a_noesis_that_runs(tmp_path):
+    """scripts/install.sh, end to end, in a fresh virtualenv: the packaging
+    (build backend, packages.find, the console script) and the script's own
+    logic - which interpreter, in-checkout or clone, venv or user site, where
+    the command landed. Editable installs write into the project directory, so
+    the tree is copied first; the source mount is read-only.
+
+    Offline: the venv sees the image's site-packages, so every dependency is
+    already satisfied and pip fetches nothing; the build backend is baked into
+    the image for exactly this test. `noesis --doctor` is the smoke check
+    because it needs no workspace, no key and no TTY - and with no TTY the
+    setup wizard stays closed."""
+    import os
+    import pathlib
+    import shutil
+    import subprocess
+    import sys
+
+    if os.name == "nt":
+        pytest.skip("the installer is verified by hand on Windows; see the changelog")
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = tmp_path / "Personal_Agent"
+    src.mkdir()
+    for name in ("pyproject.toml", "agent", "prompts", "scripts"):
+        item = root / name
+        (shutil.copytree if item.is_dir() else shutil.copy)(item, src / name)
+
+    venv = tmp_path / "venv"
+    subprocess.run([sys.executable, "-m", "venv", "--system-site-packages", str(venv)],
+                   check=True, capture_output=True)
+    # The image sets PIP_USER=1 so the agent's own `pip install` lands on a
+    # writable root. A user's machine does not; drop it or the venv branch
+    # under test quietly performs the user-site branch instead.
+    env = {k: v for k, v in os.environ.items() if k not in ("PIP_USER", "PYTHONUSERBASE")}
+    env = {**env,
+           "VIRTUAL_ENV": str(venv),
+           "PATH": f"{venv / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
+           # "false", not "1": pip maps this env var onto the option's DEST,
+           # `build_isolation`, so "1" leaves isolation on. A known pip quirk.
+           "PIP_NO_BUILD_ISOLATION": "false",
+           "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+           "AGENT_HOME": str(tmp_path / "home")}
+
+    done = subprocess.run(["sh", "scripts/install.sh"], cwd=src, env=env,
+                          capture_output=True, text=True, timeout=300)
+
+    assert done.returncode == 0, done.stdout[-800:] + done.stderr[-800:]
+    assert f"installing from {src}" in done.stdout, "it should install in place, not clone"
+    assert "Run:  noesis" in done.stdout, done.stdout[-400:]
+    noesis = venv / "bin" / "noesis"
+    assert noesis.is_file(), "the console script was not written"
+
+    doctor = subprocess.run([str(noesis), "--doctor"], env=env, cwd=tmp_path,
+                            capture_output=True, text=True, timeout=120)
+    assert doctor.stdout.strip(), doctor.stderr[-400:]
+    assert all(l.startswith(("ok", "FAIL", "--")) for l in doctor.stdout.splitlines() if l.strip()), (
+        "noesis ran something other than the doctor:" + doctor.stdout[:300])
+
+
 def test_bare_noesis_opens_the_tui(tmp_path, monkeypatch):
     """The whole request: type one word, the agent starts."""
     from agent import __main__ as entry

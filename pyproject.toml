@@ -1,3 +1,9 @@
+# Declared, not left to pip's fallback: an installer that lets pip guess the
+# backend is installing with whatever version the day's index serves.
+[build-system]
+requires = ["setuptools>=80,<81"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "personal-agent"
 version = "0.1.0"

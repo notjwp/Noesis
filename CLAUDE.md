@@ -10,7 +10,7 @@ table). Read those when you need history; do not copy history back into here.
 ## State
 
 `act -> gate -> execute -> reflect` over a two-provider adapter, kernel-enforced sandbox, CLI and
-Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,155 offline tests**, green with no API key, no network, a
+Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,156 offline tests**, green with no API key, no network, a
 read-only root filesystem, and without the `mcp` package installed.
 
 | | |
@@ -324,6 +324,10 @@ dead. State is a plain `TypedDict`: no reducers, no `Annotated`.
 ## Commands
 
 ```bash
+git clone https://github.com/notjwp/Personal_Agent.git && cd Personal_Agent && sh scripts/install.sh
+                                  # the install: a checkout, editable, into the active venv
+                                  # or the user site. Ends by saying where `noesis` landed
+
 python -m agent "goal"            # interactive; destructive calls pause for approval
 python -m agent --tui             # NOESIS; --tui --resume <id> opens one thread
                                   # FIRST RUN needs no .env: with no key and a TTY,
@@ -361,7 +365,7 @@ python eval/harness.py --case fix-import --runs 3                  # one case, r
 scripts/reset.sh <case-id>        # restore /workspace to a fixture's state (idempotent)
 powershell -File scripts/install-tasks.ps1        # run --channel and --worker at logon
 powershell -File scripts/install-tasks.ps1 -Remove
-pytest                            # 1,155 tests, no API key, no network
+pytest                            # 1,156 tests, no API key, no network
 ```
 
 Tests run in the container, which is the measured environment: read-only root, `--network none`,

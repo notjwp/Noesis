@@ -5,6 +5,52 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## The one-line installer (2026-09-14)
+
+**No number to move. A distribution step, and ROADMAP's own reason for
+deferring it - "an assistant not yet shown to learn produces support burden,
+not information" - was put to the user first: recall and skills extraction are
+measured to work, self-correction is off by default. Built on that basis.**
+
+`git clone ... && cd Personal_Agent && sh scripts/install.sh`. A checkout and
+not a package, because `noesis update` is `git pull` in the tree and a
+`pip install git+...` could not update itself. Not `curl | sh`, because the
+policy gate refuses that shape. POSIX sh, since `sh` is dash on Debian and
+bash on Git for Windows and it has to be one script.
+
+Three supporting changes:
+- `pyproject.toml` declares `[build-system]`; it did not, so pip was guessing
+  the backend on every install.
+- The image bakes `setuptools==80.9.0`, so a fresh editable install can be
+  proven offline in the suite.
+- `tests/test_cli.py`: a fresh `--system-site-packages` venv, the script run
+  in it, `noesis --doctor` from the result. Green. It had to drop the image's
+  `PIP_USER=1` from the environment or the venv branch under test quietly
+  performed the user-site branch instead - and `PIP_NO_BUILD_ISOLATION` is
+  set to "false", not "1", because pip maps that env var onto the option's
+  dest.
+
+**The container test could not have found what the host run found.** The
+first version, run on Windows with a fresh venv active, installed into the
+Microsoft Store alias's Python and printed "installed. Run: noesis" - because
+a Windows venv has no `python3.exe`, so `python3` fell through to the alias,
+and `command -v noesis` then found the pre-existing user-site command and
+called it a success. Two fixes: an active venv's python is taken BY PATH, not
+looked up; and the success check asks Python whether the `noesis` that PATH
+reaches is the one THIS install wrote. Re-run: cloned fresh, installed into
+the venv, imports the cloned tree, `--doctor` reports no key and no workspace
+- the two things the wizard exists to fix. Both branches of the PATH report
+verified.
+
+Also seen, not fixed: `pip install --user -e .` on this host moved `openai`
+to 3.2.0 and broke an unrelated `langchain-openai` in the same user site.
+Exact pins in a shared site do that. A venv avoids it and the script honours
+one; it does not create one, and that is the trade-off stated in README.
+
+1,155 -> 1,156 tests.
+
+---
+
 ## Two design items taken to the record, and neither became a cycle (2026-09-13)
 
 ### Where instructions land
