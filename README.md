@@ -151,8 +151,20 @@ tool output is capped before it reaches the model; anything larger is saved to d
 is told how to read the rest.
 
 **What it will not do without asking:** delete recursively, force-push, `sudo`, write to `/etc` or
-your shell profile, read `.ssh` or `.env`, or pipe the internet into a shell. Unattended, those are
-refused.
+your shell profile, read `.ssh` or `.env`, pipe the internet into a shell, or run a program through
+a read-only tool's flag (`sort --compress-program`, `rg --pre`). Unattended, those are refused.
+When it asks, `s` allows that *rule* for the rest of the session — `rm -rf build` once, and it stops
+asking about recursive deletes, but still asks about a force-push.
+
+**What it will not do even if you say yes:** delete `/` or your home directory, write to a block
+device, format a filesystem, shut the machine down, or fork-bomb it. Saying "allow" trusts it with
+your files; it does not trust it with the disk. Those are refused in every mode.
+
+**Where it runs.** On your machine, natively — no Docker, no VM. The tools execute in
+`AGENT_WORKSPACE` and the policy gate above is the boundary. That is a deliberate trade: a sandbox
+would keep the agent from the very files a personal assistant exists to read. The container in the
+next section is for *measuring* the agent, not for using it, and `noesis --doctor` says which one
+you are in.
 
 ## How it stays honest
 
@@ -181,8 +193,10 @@ every loop change since — which is recorded as flat, not as progress.
 
 ## Running the evaluation
 
-Scored runs happen inside a container with two writable paths and no network except an
-allowlisting proxy to the model host. The harness builds all of that itself.
+Scored runs happen inside a container — read-only code, two writable paths, no network except an
+allowlisting proxy to the model host — so that fifteen runs are fifteen independent runs and not
+fifteen that could see each other's files. The harness builds all of that itself. Docker is needed
+for this and for nothing else.
 
 ```bash
 docker build -f Containerfile -t personal-agent .

@@ -10,7 +10,7 @@ table). Read those when you need history; do not copy history back into here.
 ## State
 
 `act -> gate -> execute -> reflect` over a two-provider adapter, kernel-enforced sandbox, CLI and
-Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,156 offline tests**, green with no API key, no network, a
+Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,192 offline tests**, green with no API key, no network, a
 read-only root filesystem, and without the `mcp` package installed.
 
 | | |
@@ -365,7 +365,7 @@ python eval/harness.py --case fix-import --runs 3                  # one case, r
 scripts/reset.sh <case-id>        # restore /workspace to a fixture's state (idempotent)
 powershell -File scripts/install-tasks.ps1        # run --channel and --worker at logon
 powershell -File scripts/install-tasks.ps1 -Remove
-pytest                            # 1,156 tests, no API key, no network
+pytest                            # 1,192 tests, no API key, no network
 ```
 
 Tests run in the container, which is the measured environment: read-only root, `--network none`,
@@ -386,8 +386,11 @@ failure — `pass 4/13, 2 blocked`, never `pass 4/15`.
 
 ## Environment
 
-Execution is confined to a container on any host that runs one (§11; NFR-701 as amended). This
-machine is Windows 11 with Docker Desktop and Git Bash — not WSL2. `.agent/` is gitignored.
+SCORED RUNS are confined to a container (§11; NFR-204 as amended). Interactive use - `noesis`, the
+TUI, the worker - runs natively, and the policy gate is the whole boundary: a hardline tier
+that no approval can override, `destructive` that asks, and approvals the interface may
+remember for the process. `--doctor` says so. This machine is Windows 11 with Docker Desktop
+and Git Bash — not WSL2. `.agent/` is gitignored.
 
 ## Say when it does not work
 

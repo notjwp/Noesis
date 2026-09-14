@@ -328,10 +328,21 @@ Only [M] items are in scope for the first build. See section 9.
 
   FR-301  [M]  Classify every tool call as auto, confirm, or deny before any
                side effect occurs.
+               AMENDED 2026-09-14: a HARDLINE tier above `destructive`. A
+               person saying "allow" trusts the agent with their files, not
+               with wiping the disk; the gate could not tell the two apart.
+               Deleting root or home, writing a block device, mkfs, shutdown,
+               a fork bomb: `deny` in every mode, and the reason says no
+               approval can change it. Tiny on purpose - only no-recovery.
   FR-302  [M]  No call may write outside the workspace root without consent.
                AMENDED 2026-09-08: outside is `confirm`, not `deny` - see 8.2.
                Rejection confined the wrong half; run_shell was never confined
                at all, and the interactive agent never ran in a container.
+               AMENDED 2026-09-14: the interface may remember an approval for
+               the rest of the PROCESS, keyed by (tool, the rule that fired).
+               In the interface, never in classify(): FR-305 keeps the gate
+               pure, and memory upstream of a resumable node is consulted
+               twice. The reason string names the rule for exactly this.
   FR-303  [M]  Suspend execution and await human input on a confirm verdict in
                interactive mode.
   FR-304  [M]  Downgrade confirm to deny in autonomous mode and record the
@@ -439,6 +450,10 @@ A requirement without a number is not testable. Targets are the point.
                              indirection plus output redaction
   NFR-204   Isolation        All execution in a container with no host mounts
                              besides the workspace
+                             AMENDED 2026-09-14: describes SCORED RUNS. Interactive
+                             use runs natively, with the gate as the boundary -
+                             see 8.2, FR-302, where this was recorded on
+                             2026-09-08 and which `--doctor` now says out loud.
   NFR-205   Security         Sandbox network egress restricted to a configured
                              domain allowlist. AMENDED 2026-09-02: the email
                              channel adds the configured IMAP and SMTP hosts

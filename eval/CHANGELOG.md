@@ -5,6 +5,69 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## No sandbox, said out loud - and a gate good enough to be the boundary (2026-09-14)
+
+**Not a tuning cycle.** No loop code; the gate, the interface and the record.
+
+### The gap
+
+NFR-204 says "all execution in a container". The one-line installer ships
+`noesis` on the host, where `run_shell` runs on the host, and `docker` appears
+nowhere in `agent/`. The container is the harness's. Section 8.2 has recorded
+this since 2026-09-08 (FR-302, "the gate IS the boundary"); the README implied
+otherwise, `--doctor` said nothing, and NFR-204's own line carried no
+amendment. That is the decision this project already made, with the paperwork
+finally matching it: native, gate as boundary, container for measurement only.
+
+With no sandbox, the gate's quality is the whole security story, and this
+month it was found to miss `python -c` payloads, be walked around by
+`run_python`, and false-positive on `*.env`. So three things that make the
+trade survivable, each small, each tested and mutation-checked:
+
+**1. A HARDLINE tier above `destructive`.** Until today nothing survived an
+"allow": `rm -rf /` was `confirm`, and a person hitting `a` reflexively was
+one keystroke from it. Now deleting root or home, writing a block device,
+`mkfs`, shutdown/reboot/halt/poweroff at the START of a command, and a fork
+bomb are `deny` in every mode, with a reason that says no approval can change
+it. Anchored on command start, so `echo reboot` and `grep shutdown log` are
+words; `rm -rf build` and `rm -rf /tmp/x` stay `confirm`. Five patterns.
+
+**2. Two categories the regex was missing.** Read-only verbs with a flag that
+runs a program - `sort --compress-program`, `rg --pre`, `ag --pager`,
+`man -P` - escalate; the verb was never the risk. And an interpreter heredoc
+(`python <<EOF`) is inline source with more room, under the same
+deletes-only rule as `-c`.
+
+**3. Approvals remembered for the process, by RULE.** `DANGER` is now a list
+of (name, pattern) and the reason names which one fired - "run_shell is
+destructive (recursive delete)". The CLI gains `[s]ession`, the TUI a third
+button, both keyed on (tool, rule): allow `rm -rf build` once and recursive
+deletes stop asking, a force-push still does. The memory lives in `cli.py`,
+never in `classify()`: FR-305 keeps the gate pure, and a resumable node
+re-runs from its first line. Hardline never reaches it - a refusal is not a
+question.
+
+Plus one line in `--doctor`: `sandbox none: tools run on this machine; the
+policy gate is the boundary`.
+
+### Verified
+
+1,156 -> 1,192 tests. Four mutations, each verified applied: hardline never
+fires (17 red), exec-flag rule removed (4 red), memory never consulted (1
+red), memory keyed on the tool instead of the rule (1 red).
+
+Blast radius, replayed: **6,886 recorded executions**, 0 refused by hardline,
+0 newly escalated. The new tiers touch nothing the agent has ever done. The
+scored splits are autonomous, where `confirm` was already `deny`, so the only
+behavioural change a scored run could see is a hardline pattern firing on a
+command that was already refused - none did.
+
+CONTEXT.md: FR-301, FR-303 and NFR-204 amended in place, pointing at 8.2.
+README: what it will not do without asking, what it will not do even if you
+say yes, and where it runs. CLAUDE.md's environment line corrected.
+
+---
+
 ## The one-line installer (2026-09-14)
 
 **No number to move. A distribution step, and ROADMAP's own reason for
