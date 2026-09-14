@@ -1,11 +1,13 @@
-```
+<div align="center">
+<pre>
 ███╗   ██╗ ██████╗ ███████╗███████╗██╗███████╗
 ████╗  ██║██╔═══██╗██╔════╝██╔════╝██║██╔════╝
 ██╔██╗ ██║██║   ██║█████╗  ███████╗██║███████╗
 ██║╚██╗██║██║   ██║██╔══╝  ╚════██║██║╚════██║
 ██║ ╚████║╚██████╔╝███████╗███████║██║███████║
 ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚══════╝╚═╝╚══════╝
-```
+</pre>
+</div>
 
 A personal AI agent that runs on your machine. You give it a goal in plain English — fix these
 tests, cut a release, find out what the quota is on this page, answer my email — and it plans,
