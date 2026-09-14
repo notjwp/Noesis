@@ -7,7 +7,7 @@
 # classifies that shape as destructive, and an installer this project ships
 # should be one it would run:
 #
-#   git clone https://github.com/notjwp/Personal_Agent.git && cd Personal_Agent && sh scripts/install.sh
+#   git clone https://github.com/notjwp/Noesis.git && cd Noesis && sh scripts/install.sh
 #
 # A CHECKOUT, not a package: `noesis update` is `git pull` in this tree, so a
 # `pip install git+...` would install something that cannot update itself.
@@ -15,7 +15,7 @@
 # and pip reports the requirements already satisfied.
 set -eu
 
-REPO="https://github.com/notjwp/Personal_Agent.git"
+REPO="https://github.com/notjwp/Noesis.git"
 
 # The interpreter. An active virtualenv's own python, by path, before any PATH
 # lookup: a Windows venv has no python3.exe, so `python3` there resolves to the
@@ -41,15 +41,15 @@ fi
     || { echo "NOESIS needs Python 3.12 or newer; $python is older." >&2; exit 1; }
 command -v git >/dev/null || { echo "NOESIS needs git on PATH: the install is a checkout and updates are a pull." >&2; exit 1; }
 
-# Inside the checkout already, or clone one here. `name = "personal-agent"`
+# Inside the checkout already, or clone one here. `name = "noesis"`
 # is the line that says this pyproject is ours and not some other project's.
-if [ -f pyproject.toml ] && grep -q '^name = "personal-agent"' pyproject.toml; then
+if [ -f pyproject.toml ] && grep -q '^name = "noesis"' pyproject.toml; then
     :
-elif [ -f Personal_Agent/pyproject.toml ]; then
-    cd Personal_Agent
+elif [ -f Noesis/pyproject.toml ]; then
+    cd Noesis
 else
-    git clone "$REPO" Personal_Agent
-    cd Personal_Agent
+    git clone "$REPO" Noesis
+    cd Noesis
 fi
 echo "installing from $(pwd) with $python $pyargs"
 

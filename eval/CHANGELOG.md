@@ -12,7 +12,7 @@ deferring it - "an assistant not yet shown to learn produces support burden,
 not information" - was put to the user first: recall and skills extraction are
 measured to work, self-correction is off by default. Built on that basis.**
 
-`git clone ... && cd Personal_Agent && sh scripts/install.sh`. A checkout and
+`git clone ... && cd Noesis && sh scripts/install.sh`. A checkout and
 not a package, because `noesis update` is `git pull` in the tree and a
 `pip install git+...` could not update itself. Not `curl | sh`, because the
 policy gate refuses that shape. POSIX sh, since `sh` is dash on Debian and
@@ -46,6 +46,22 @@ Also seen, not fixed: `pip install --user -e .` on this host moved `openai`
 to 3.2.0 and broke an unrelated `langchain-openai` in the same user site.
 Exact pins in a shared site do that. A venv avoids it and the script honours
 one; it does not create one, and that is the trade-off stated in README.
+
+**The package is `noesis` now, not `personal-agent`.** The installer was the
+first thing to print the package name at a user, and it printed the wrong
+one. `pyproject.toml`, the script's in-checkout marker and the README title
+are renamed, and the GitHub repository is now `notjwp/Noesis` - the clone
+URL, the clone directory and the origin remote follow it. The docker image and
+the egress network keep `personal-agent`: the image name is recorded in every
+run manifest and a rename there would split the record. Anyone with the old name installed:
+`pip uninstall personal-agent` first, or two editable dists point at one
+tree. Done on this host.
+
+The rename went through Python's `write_text`, which on Windows turned the
+script's LF into CRLF, and dash failed on line 16 with `set: Illegal option
+-`. `.gitattributes` pins `*.sh` to LF at checkout; it does not pin what an
+editor writes. Fixed with `write_bytes`. The standing lesson on line endings,
+paid for a second time.
 
 1,155 -> 1,156 tests.
 

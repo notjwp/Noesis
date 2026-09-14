@@ -432,7 +432,7 @@ def test_the_installer_produces_a_noesis_that_runs(tmp_path):
     if os.name == "nt":
         pytest.skip("the installer is verified by hand on Windows; see the changelog")
     root = pathlib.Path(__file__).resolve().parent.parent
-    src = tmp_path / "Personal_Agent"
+    src = tmp_path / "Noesis"
     src.mkdir()
     for name in ("pyproject.toml", "agent", "prompts", "scripts"):
         item = root / name

@@ -324,7 +324,7 @@ dead. State is a plain `TypedDict`: no reducers, no `Annotated`.
 ## Commands
 
 ```bash
-git clone https://github.com/notjwp/Personal_Agent.git && cd Personal_Agent && sh scripts/install.sh
+git clone https://github.com/notjwp/Noesis.git && cd Noesis && sh scripts/install.sh
                                   # the install: a checkout, editable, into the active venv
                                   # or the user site. Ends by saying where `noesis` landed
 

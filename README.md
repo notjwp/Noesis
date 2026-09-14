@@ -1,4 +1,4 @@
-# personal-agent
+# NOESIS
 
 A single-user **personal AI agent**: you give it a goal in plain English, it plans, calls tools, and
 works until it reaches a terminal verdict — `done`, `stuck`, or out of budget — then stops and tells
@@ -228,7 +228,7 @@ what doing the work actually costs.
 Python 3.12+ and git. One line, from anywhere:
 
 ```bash
-git clone https://github.com/notjwp/Personal_Agent.git && cd Personal_Agent && sh scripts/install.sh
+git clone https://github.com/notjwp/Noesis.git && cd Noesis && sh scripts/install.sh
 ```
 
 It installs into the active virtualenv if there is one, otherwise the user site — never the

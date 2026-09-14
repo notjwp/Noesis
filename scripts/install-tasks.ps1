@@ -36,7 +36,7 @@ if ($Remove) {
 }
 
 if (-not (Test-Path (Join-Path $ProjectDir "agent\cli.py"))) {
-    throw "not a Personal_Agent checkout: $ProjectDir"
+    throw "not a Noesis checkout: $ProjectDir"
 }
 if (-not (Test-Path (Join-Path $ProjectDir ".env"))) {
     Write-Warning ".env not found - the channel needs AGENT_EMAIL_USER / _PASSWORD / _ALLOW"
