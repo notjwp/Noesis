@@ -182,14 +182,15 @@ Current numbers, on `nvidia/nemotron-3-super-120b-a12b` at the free tier:
 |---|---|---|
 | dev | bug fixes in small projects | **15/15** |
 | held out | the same, on cases never tuned against | **30/30** |
-| real repositories | six real projects, real bugs | **8/12** |
+| real repositories | six real projects, real bugs | **11/18** |
 | tools | long-running processes, asking the user | **9/9** |
 | search / web | finding things out | **9/9** · **18/18** |
 | memory recall | remembering across sessions | **85.7%** |
 | skills | loading the right procedure | **94.4%** |
 
 The `real` split is the only one with headroom, and it has been flat since early September across
-every loop change since — which is recorded as flat, not as progress.
+every loop change since — 10/18, then 11/18 on a re-run with nothing changed — which is recorded as
+flat, not as progress.
 
 ## Running the evaluation
 

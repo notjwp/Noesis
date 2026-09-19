@@ -5,6 +5,74 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## The real split at 3 runs: 11/18, flat, and 70% more tokens for no reason found (2026-09-19)
+
+**Not a tuning cycle.** A re-baseline on current code, pre-registered as such:
+no change under test, nothing to keep or revert. Run `20260919T033607Z`,
+`--split real --runs 3 --pace 20`, 18 rows, 0 blocked, 0 tampered.
+
+### The number
+
+**11/18.** The last 3-run figure was 10/18 on 2026-09-03; the five 2-run
+passes since were 7, 7, 8, 8, 8 of 12. Per case:
+
+```
+                 09-03   09-12   09-19
+cachetools        3/3     2/2     3/3    done, budget, done
+markdown          3/3     2/2     3/3    done x3
+more-itertools    2/3     2/2     2/3    budget, done, budget
+click             2/3     1/2     2/3    stuck, budget, stuck
+rich              0/3     1/2     0/3    budget x3
+humanize          0/3     0/2     1/3    budget x3
+```
+
+The +1 over 10/18 is `humanize[1]`, the first humanize pass on this model
+after 0 in eight passes - an edit that landed, tests that went green, and a
+`budget` verdict because it never said done. Nothing shipped since 09-12
+touches the loop's path on these cases: the gate's new tiers fired on 0 of
+409 calls (3 `deny`, all `unknown tool`, same as the 3 of 239 on 09-12),
+schema chars are 7,650 in both, no skill loaded in either. It is a good
+seed, exactly as `float-division` was on the held-out set, and it is
+recorded as flat: **11/18, n=3, level with 10/18.**
+
+`rich` is 0/3 and has now scored 0, 1, 0 across the last three passes with
+every loss `budget`. `humanize` 1/3 stays in the set, as decided before the
+run: dropping a case that fails would be quoting a number nobody measured.
+
+### The thing that DID move, and is not explained
+
+Median tokens **402,089**, against 241,564 (09-03) and 236,461 (09-12), the
+highest of any pass. Ten of eighteen verdicts are `budget`, against 4/18 and
+4/12. And five of the eleven passes did not end by `done` - three `budget`,
+two `stuck` at the turn cap - against 1 of 10 and 1 of 8 before.
+
+Where it went: **turns**, not tokens per turn. Median turns 17.5 -> 18.5 ->
+25.5; tokens per turn 11.6k -> 13.1k -> 13.4k, flat. Median `read_file`
+calls per run went from ~7 to ~14. `cachetools[1]` is the shape: 21 calls
+before its first edit, ten of them `read_file` on the same `__init__.py`;
+the edit at call 22 fixed it, pytest at 23 passed, and it kept going until
+the budget stopped it at 27. `more-itertools[0]` edited at 26 and 27, ran
+pytest three ways, and hit the cap at 30 with the tests green.
+
+What it is not: not the gate (above), not the schema, not the `read_file`
+floor or the compaction bound (both were in the 09-12 pass, the lowest
+median of the five), not tool errors (14 in 409 calls against 15 in 239).
+Turn latency is unchanged (first token p50 3.1s against 2.8s). That leaves
+two candidates this run cannot separate: seed variance at n=3 on a split
+whose single-case wall time ranges 1.6 to 18 minutes, and the endpoint
+serving something different under the same model id. A free tier gives no
+way to check the second. **Hypothesis, not finding.** It becomes a cycle
+only if the next pass on unchanged code repeats it - and if it does, the
+bucket is "passes that do not terminate", which is `reflect`, not `act`.
+
+### What is recorded
+
+- `real` at 3 runs: **11/18**, flat with 10/18. README and CLAUDE.md say so.
+- median tokens 402k, `budget` 10/18, 5 of 11 passes not by `done` - all
+  three recorded as observed, none attributed.
+- `humanize` 1/3 on this model, in the set.
+- Nothing kept, nothing reverted. No code in this entry.
+
 ## No sandbox, said out loud - and a gate good enough to be the boundary (2026-09-14)
 
 **Not a tuning cycle.** No loop code; the gate, the interface and the record.
