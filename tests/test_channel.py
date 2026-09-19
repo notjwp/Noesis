@@ -572,6 +572,43 @@ def test_diagnose_says_what_the_boundary_is(channel, monkeypatch, tmp_path):
     assert line.startswith("--"), line
 
 
+def test_diagnose_names_the_home_and_whether_it_can_be_written(channel, monkeypatch, tmp_path):
+    """Measured as a non-root user with the old default of /state: the doctor
+    itself died in sqlite3.connect with `unable to open database file`. The
+    home is a precondition like the workspace, so it gets a line - and the
+    check reads the nearest existing ancestor rather than creating anything."""
+    from agent import channel as ch, config
+
+    monkeypatch.setattr(config, "AGENT_HOME", tmp_path / "not" / "yet" / "made")
+    line = next(l for l in ch.diagnose() if " home " in l)
+    assert line.startswith("ok"), line
+    assert not (tmp_path / "not").exists(), "the doctor must not create the home"
+
+    monkeypatch.setattr(ch.os, "access", lambda path, mode: False)
+    line = next(l for l in ch.diagnose() if " home " in l)
+    assert line.startswith("FAIL") and "not writable" in line, line
+
+
+def test_the_default_home_is_under_the_users_own_directory(tmp_path):
+    """/state is the container's, and its image says so. Off it, the old
+    default was root-owned on macOS and Linux and a drive root on Windows.
+    Resolved in a fresh interpreter, because config reads its environment
+    at import."""
+    import os
+    import pathlib
+    import subprocess
+    import sys
+
+    env = {k: v for k, v in os.environ.items() if k != "AGENT_HOME"}
+    env.update({"HOME": str(tmp_path), "USERPROFILE": str(tmp_path)})
+    root = pathlib.Path(__file__).resolve().parent.parent
+    done = subprocess.run([sys.executable, "-c", "from agent import config; print(config.AGENT_HOME)"],
+                          cwd=root, env=env, capture_output=True, text=True, timeout=60)
+
+    assert done.returncode == 0, done.stderr[-400:]
+    assert pathlib.Path(done.stdout.strip()) == (tmp_path / ".noesis").resolve()
+
+
 def test_diagnose_FAILS_on_a_missing_workspace(channel, monkeypatch, tmp_path):
     from agent import config
 

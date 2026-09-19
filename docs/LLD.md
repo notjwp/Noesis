@@ -16,7 +16,7 @@ Constants only. No functions, no I/O beyond reading environment variables.
 ```python
 WORKSPACE       : Path   # os.environ["AGENT_WORKSPACE"], default "/workspace", resolved
 ARTIFACTS       : Path   # WORKSPACE / ".agent" / "artifacts"
-AGENT_HOME      : Path   # os.environ["AGENT_HOME"], default "/state", resolved
+AGENT_HOME      : Path   # os.environ["AGENT_HOME"], default "~/.noesis" (the image sets /state), resolved
 STATE_DB        : Path   # AGENT_HOME / "state.db"   (outside WORKSPACE — survives reset.sh)
 
 MODEL           : str    = "claude-opus-5"

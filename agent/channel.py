@@ -20,6 +20,7 @@ Three designs, none of them lifted:
 import email.message
 import email.utils
 import imaplib
+import os
 import smtplib
 import time
 
@@ -331,6 +332,12 @@ def diagnose() -> list[str]:
     root = config.WORKSPACE
     lines.append(f"ok    workspace {root}" if root.is_dir()
                  else f"FAIL  workspace {root} does not exist")
+    # Whether the home CAN be written, from its nearest existing ancestor -
+    # creating it here would be a change, and the doctor changes nothing.
+    home = config.AGENT_HOME
+    nearest = next(p for p in (home, *home.parents) if p.exists())
+    lines.append(f"ok    home {home}" if os.access(nearest, os.W_OK)
+                 else f"FAIL  home {home} cannot be created: {nearest} is not writable")
     # Said here because nothing else says it: the sandbox belongs to the eval
     # harness, and on this machine the policy gate is the whole boundary.
     lines.append("--    sandbox none: tools run on this machine; the policy gate "

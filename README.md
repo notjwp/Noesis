@@ -67,7 +67,7 @@ One thing the wizard does not ask for — the folder the agent may work in:
 ```bash
 # in .env (the wizard creates the file; add this line)
 AGENT_WORKSPACE=/path/to/the/folder/it/may/change
-AGENT_HOME=/path/to/keep/its/memory      # optional; where memory and skills live
+AGENT_HOME=/path/to/keep/its/memory      # optional; memory and skills live here, default ~/.noesis
 ```
 
 The agent works inside `AGENT_WORKSPACE`. Reading outside it is allowed — it is your assistant
@@ -211,7 +211,7 @@ place Docker is needed.
 ```bash
 docker build -f Containerfile -t personal-agent .
 
-# 1,193 offline tests - no API key, no network
+# 1,195 offline tests - no API key, no network
 docker run --rm --network none --read-only --tmpfs /tmp:exec \
   -v "$PWD:/app:ro" -v "$PWD/eval/workspace:/workspace" \
   -v "$PWD/.agent/homes/_t:/state" personal-agent python -m pytest -q
@@ -235,7 +235,7 @@ change:
 | variable | default | |
 |---|---|---|
 | `AGENT_WORKSPACE` | `/workspace` | the folder it may change — **set this** |
-| `AGENT_HOME` | `/state` | memory, skills, checkpoints |
+| `AGENT_HOME` | `~/.noesis` | memory, skills, checkpoints |
 | `AGENT_PROVIDER` | `nvidia` | or `anthropic` |
 | `OPENAI_BASE_URL` `OPENAI_MODEL` | NVIDIA NIM | any OpenAI-compatible endpoint |
 | `AGENT_MEMORY` | `on` | remember across sessions |

@@ -5,6 +5,33 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## The home defaults to ~/.noesis: the old default was a first-run traceback on macOS and Linux (2026-09-19)
+
+**Not a tuning cycle.** One default, one doctor line.
+
+Found by way of a stray `D:\state` on this machine. `AGENT_HOME` defaulted
+to `/state`, which is the container's mount point and right THERE - the
+image sets it, the harness passes it. Anywhere else it was a directory
+nobody chose: on Windows `Path("/state")` resolves to the current drive's
+root, so runs from the days before `.env` was loaded wrote `D:\state`; on
+macOS and Linux `/state` is root-owned. Measured as a non-root user with no
+`AGENT_HOME`: `noesis --doctor` itself died in `sqlite3.connect` with
+`unable to open database file`. The README called the variable optional.
+A person who pastes the install line on a Mac and types `noesis` got that.
+
+Now `~/.noesis`, expanded and resolved - per-user, the way every tool's
+home is. The image and the harness keep `/state`, explicitly, as they
+already did; nothing in a scored run changes. The doctor gains a line,
+`ok home <path>` or `FAIL home <path> cannot be created: <ancestor> is not
+writable`, checked from the nearest existing ancestor so the check creates
+nothing. Same probe re-run: `ok home /tmp/.noesis`, no traceback.
+
+The `_require_workspace` reasoning - no fallback for the WORKSPACE, because a
+default that redirects writes to a directory nobody chose hides what it did
+- still stands. The home is different: it holds the agent's own memory and
+checkpoints, not the user's files, and a per-user default is a choice the
+user would recognise. 1,193 -> 1,195 tests.
+
 ## The installer in Python, so the one line works on all three hosts (2026-09-19)
 
 **Not a tuning cycle.** No loop code.

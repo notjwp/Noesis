@@ -24,7 +24,9 @@ WORKSPACE = Path(_env("AGENT_WORKSPACE", "/workspace")).resolve()
 # Artifacts sit INSIDE the workspace so a spilled file is readable without
 # tripping FR-302; state sits OUTSIDE it so reset.sh cannot wipe it.
 ARTIFACTS = WORKSPACE / ".agent" / "artifacts"
-AGENT_HOME = Path(_env("AGENT_HOME", "/state")).resolve()
+# Per-user by default. The container's image sets /state; on a host, / is not
+# writable and a drive root is a directory nobody chose - measured both ways.
+AGENT_HOME = Path(_env("AGENT_HOME", "~/.noesis")).expanduser().resolve()
 STATE_DB = AGENT_HOME / "state.db"
 
 # --- model -----------------------------------------------------------------
