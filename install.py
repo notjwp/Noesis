@@ -4,13 +4,19 @@ One line from anywhere, no `curl | sh` - the policy gate in agent/policy.py
 classifies that shape as destructive, and an installer this project ships
 should be one it would run:
 
-  macOS, Linux   git clone https://github.com/notjwp/Noesis.git && cd Noesis && python3 scripts/install.py
-  Windows        git clone https://github.com/notjwp/Noesis.git; cd Noesis; python scripts/install.py
+  macOS, Linux   git clone --filter=blob:none --sparse https://github.com/notjwp/Noesis.git && cd Noesis && python3 install.py
+  Windows        git clone --filter=blob:none --sparse https://github.com/notjwp/Noesis.git; cd Noesis; python install.py
 
 Python and not sh: it is the one interpreter all three have, and the same
 file has to do the same thing on each. `python` on Windows and `python3` on
 the others because a Windows virtualenv has no python3.exe - `python3` there
 is the Microsoft Store alias, and installs into a Python nobody chose.
+
+At the repository ROOT, because a `--sparse` clone checks out only the root
+until told otherwise, and the file that widens it has to be there to run.
+The clone is partial and sparse so a person installing the agent does not
+download the evaluation's vendored repositories: 1,673 of 1,746 tracked
+files are the developer's, and a full clone is 29 MB against about 1.
 
 A CHECKOUT, not a package: `noesis --update` is `git pull` in this tree, so a
 `pip install git+...` would install something that cannot update itself.
@@ -67,8 +73,16 @@ def main():
                     root = candidate
                     break
     if root is None:
-        subprocess.run(["git", "clone", REPO, "Noesis"], check=True)
+        subprocess.run(["git", "clone", "--filter=blob:none", "--sparse", REPO, "Noesis"], check=True)
         root = os.path.join(cwd, "Noesis")
+
+    # A sparse checkout holds only the root until it is told what the agent
+    # needs. A full checkout - a developer's - is left exactly as it is.
+    sparse = subprocess.run(["git", "config", "--bool", "core.sparseCheckout"], cwd=root,
+                            capture_output=True, text=True).stdout.strip() == "true"
+    if sparse:
+        subprocess.run(["git", "sparse-checkout", "set", "agent", "prompts", "scripts"],
+                       cwd=root, check=True)
     print("installing from %s with %s" % (root, sys.executable), flush=True)
 
     # Into the active virtualenv if there is one, else the user site. Never

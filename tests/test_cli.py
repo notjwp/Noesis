@@ -448,12 +448,13 @@ def test_the_noesis_command_points_at_the_entry_that_loads_env():
 
 
 def test_the_installer_produces_a_noesis_that_runs(tmp_path):
-    """scripts/install.py, end to end, in a fresh virtualenv, invoked the way
-    the README says - `python3 scripts/install.py` with the venv on PATH: the
-    packaging (build backend, packages.find, the console script) and the
-    script's own logic - in-checkout or clone, venv or user site, where the
-    command landed. Editable installs write into the project directory, so
-    the tree is copied first; the source mount is read-only.
+    """install.py, end to end, the way the README says: a `--sparse` clone
+    that holds only the root, then `python3 install.py` with a fresh venv on
+    PATH. Under test: the packaging (build backend, packages.find, the
+    console script), the sparse checkout widened to what the agent needs and
+    nothing more, and the script's own logic - venv or user site, where the
+    command landed. The clone's source is a repository built from a copy of
+    this tree, because the source mount is read-only and offline.
 
     Offline: the venv sees the image's site-packages, so every dependency is
     already satisfied and pip fetches nothing; the build backend is baked into
@@ -469,11 +470,19 @@ def test_the_installer_produces_a_noesis_that_runs(tmp_path):
     if os.name == "nt":
         pytest.skip("the installer is verified by hand on Windows; see the changelog")
     root = pathlib.Path(__file__).resolve().parent.parent
-    src = tmp_path / "Noesis"
-    src.mkdir()
-    for name in ("pyproject.toml", "agent", "prompts", "scripts"):
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    for name in ("pyproject.toml", "install.py", "agent", "prompts", "scripts", "tests"):
         item = root / name
-        (shutil.copytree if item.is_dir() else shutil.copy)(item, src / name)
+        (shutil.copytree if item.is_dir() else shutil.copy)(item, upstream / name)
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run([*git, "init", "-q"], cwd=upstream, check=True)
+    subprocess.run([*git, "add", "-A"], cwd=upstream, check=True, capture_output=True)
+    subprocess.run([*git, "commit", "-q", "-m", "upstream"], cwd=upstream, check=True)
+    src = tmp_path / "Noesis"
+    subprocess.run(["git", "clone", "-q", "--sparse", upstream.as_uri(), str(src)], check=True)
+    assert (src / "install.py").is_file() and not (src / "agent").exists(), (
+        "a --sparse clone should hold only the root")
 
     venv = tmp_path / "venv"
     subprocess.run([sys.executable, "-m", "venv", "--system-site-packages", str(venv)],
@@ -491,11 +500,13 @@ def test_the_installer_produces_a_noesis_that_runs(tmp_path):
            "PIP_DISABLE_PIP_VERSION_CHECK": "1",
            "AGENT_HOME": str(tmp_path / "home")}
 
-    done = subprocess.run(["python3", "scripts/install.py"], cwd=src, env=env,
+    done = subprocess.run(["python3", "install.py"], cwd=src, env=env,
                           capture_output=True, text=True, timeout=300)
 
     assert done.returncode == 0, done.stdout[-800:] + done.stderr[-800:]
     assert f"installing from {src}" in done.stdout, "it should install in place, not clone"
+    assert (src / "agent").is_dir() and (src / "prompts").is_dir(), "the sparse set was not widened"
+    assert not (src / "tests").exists(), "the developer's directories must stay out of the checkout"
     assert "Run:  noesis" in done.stdout, done.stdout[-400:]
     noesis = venv / "bin" / "noesis"
     assert noesis.is_file(), "the console script was not written"
@@ -527,12 +538,12 @@ def test_the_installer_hands_over_to_the_active_venvs_own_python(tmp_path):
     stub.write_text("#!/bin/sh\necho \"handed over to $0 $*\"\n", encoding="utf-8")
     stub.chmod(0o755)
 
-    done = subprocess.run([sys.executable, str(root / "scripts" / "install.py")],
+    done = subprocess.run([sys.executable, str(root / "install.py")],
                           cwd=tmp_path, env={**os.environ, "VIRTUAL_ENV": str(tmp_path / "venv")},
                           capture_output=True, text=True, timeout=60)
 
     assert done.returncode == 0, done.stderr[-400:]
-    assert f"handed over to {stub} {root / 'scripts' / 'install.py'}" in done.stdout
+    assert f"handed over to {stub} {root / 'install.py'}" in done.stdout
     assert "installing from" not in done.stdout, "it must not install under the wrong python"
 
 

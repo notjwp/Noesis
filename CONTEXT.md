@@ -1094,21 +1094,25 @@ re-argue a decision that has already been measured.
                        broken thing looks healthy. Runs --doctor BEFORE
                        registering: a task that dies on start looks identical in
                        the UI to one that works.
-    scripts/install.py A STATED DEVIATION, added 2026-09-14 as install.sh,
-                       Python since 2026-09-19. The one-line install: clone (or
-                       install in place), pip -e into the active venv else the
-                       user site, then say where `noesis` landed and whether
-                       PATH reaches it. A checkout and not a package because
-                       `noesis --update` is `git pull`; not `curl | sh` because
-                       agent/policy.py refuses that shape. Python and not sh
-                       because the line has to work in PowerShell too, and
-                       Python is the one interpreter all three hosts share -
-                       one file, not an sh script and a .ps1 kept in step.
-                       Proven end to end in the suite (a fresh venv, offline,
-                       the build backend baked into the image for it), the
-                       venv hand-over in a second test, and by hand on Windows
-                       in PowerShell - where the sh version installed into the
-                       Store alias's Python and reported a stale command.
+    install.py         A STATED DEVIATION, added 2026-09-14 as scripts/install.sh,
+                       Python since 2026-09-19 and at the ROOT since the same
+                       day. The one-line install: a `--filter=blob:none
+                       --sparse` clone (or install in place), the sparse set
+                       widened to agent, prompts and scripts, pip -e into the
+                       active venv else the user site, then say where `noesis`
+                       landed and whether PATH reaches it. A checkout and not a
+                       package because `noesis --update` is `git pull`; not
+                       `curl | sh` because agent/policy.py refuses that shape.
+                       Python and not sh because the line has to work in
+                       PowerShell too, and Python is the one interpreter all
+                       three hosts share. At the root because a sparse clone
+                       holds only the root, and the file that widens it must
+                       be there to run: 1,673 of 1,746 tracked files are
+                       eval/, and a full clone is 29 MB against about 1.
+                       Proven end to end in the suite (a sparse clone of a
+                       repository built from this tree, a fresh venv, offline),
+                       the venv hand-over in a second test, and by hand on
+                       Windows in PowerShell.
     .agent/            RUNTIME STATE, gitignored
       artifacts/       spilled tool output. INSIDE the workspace, because the
                        model must be able to read a spill without tripping
