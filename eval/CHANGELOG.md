@@ -5,6 +5,42 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## The installer in Python, so the one line works on all three hosts (2026-09-19)
+
+**Not a tuning cycle.** No loop code.
+
+`sh scripts/install.sh` worked on macOS, Linux and Git Bash - and nowhere a
+Windows person actually types: PowerShell has no `sh` on PATH unless Git for
+Windows was installed with a non-default option, and PowerShell 5.1 has no
+`&&` at all. The line on the website has to be pasteable into the shell
+Windows opens, or it is a line for two hosts with a footnote.
+
+Two ways to get there: a `.ps1` twin of the sh script, ~60 lines each and
+two brains to keep in step; or one script in the interpreter all three hosts
+share. `scripts/install.py` replaces `install.sh`, same logic, one file:
+
+```
+macOS, Linux   git clone ... && cd Noesis && python3 scripts/install.py
+Windows        git clone ...; cd Noesis; python scripts/install.py
+```
+
+`python` on Windows and `python3` elsewhere for the reason the sh version
+found the hard way: a Windows virtualenv has no `python3.exe`, so `python3`
+there is the Microsoft Store alias. And the script now HANDS OVER: if
+`VIRTUAL_ENV` is set and the interpreter running it is not that venv's, it
+re-runs itself under the venv's python before touching anything - the
+install lands where the person put themselves, whichever `python` they
+typed. Syntax kept to what a 3.8 can parse, so an old interpreter gets the
+"needs 3.12" message and not a SyntaxError.
+
+Proven: the end-to-end suite test now runs the documented line
+(`python3 scripts/install.py`, venv on PATH); a second test drives the
+hand-over with a stand-in venv whose python is a shell script that records
+the call; and by hand on Windows in PowerShell - fresh venv, `python
+scripts/install.py`, `noesis.exe` written and `--doctor` runs; then the
+system Python 3.13 invoked with the venv active, and the line says
+`with ...\venv\Scripts\python.exe`. 1,192 -> 1,193 tests.
+
 ## The real split at 3 runs: 11/18, flat, and 70% more tokens for no reason found (2026-09-19)
 
 **Not a tuning cycle.** A re-baseline on current code, pre-registered as such:

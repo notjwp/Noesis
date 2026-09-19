@@ -10,7 +10,7 @@ table). Read those when you need history; do not copy history back into here.
 ## State
 
 `act -> gate -> execute -> reflect` over a two-provider adapter, a policy gate that is the boundary
-(a kernel-enforced sandbox for scored runs only), CLI and Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,192 offline tests**, green with no API key, no network, a
+(a kernel-enforced sandbox for scored runs only), CLI and Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,193 offline tests**, green with no API key, no network, a
 read-only root filesystem, and without the `mcp` package installed.
 
 | | |
@@ -324,9 +324,10 @@ dead. State is a plain `TypedDict`: no reducers, no `Annotated`.
 ## Commands
 
 ```bash
-git clone https://github.com/notjwp/Noesis.git && cd Noesis && sh scripts/install.sh
+git clone https://github.com/notjwp/Noesis.git && cd Noesis && python3 scripts/install.py
                                   # the install: a checkout, editable, into the active venv
-                                  # or the user site. Ends by saying where `noesis` landed
+                                  # or the user site. Ends by saying where `noesis` landed.
+                                  # Windows, PowerShell: `;` for `&&`, `python` for `python3`
 
 python -m agent "goal"            # interactive; destructive calls pause for approval
 python -m agent --tui             # NOESIS; --tui --resume <id> opens one thread
@@ -365,7 +366,7 @@ python eval/harness.py --case fix-import --runs 3                  # one case, r
 scripts/reset.sh <case-id>        # restore /workspace to a fixture's state (idempotent)
 powershell -File scripts/install-tasks.ps1        # run --channel and --worker at logon
 powershell -File scripts/install-tasks.ps1 -Remove
-pytest                            # 1,192 tests, no API key, no network
+pytest                            # 1,193 tests, no API key, no network
 ```
 
 Tests run in the container, which is the measured environment: read-only root, `--network none`,

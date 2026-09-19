@@ -448,10 +448,11 @@ def test_the_noesis_command_points_at_the_entry_that_loads_env():
 
 
 def test_the_installer_produces_a_noesis_that_runs(tmp_path):
-    """scripts/install.sh, end to end, in a fresh virtualenv: the packaging
-    (build backend, packages.find, the console script) and the script's own
-    logic - which interpreter, in-checkout or clone, venv or user site, where
-    the command landed. Editable installs write into the project directory, so
+    """scripts/install.py, end to end, in a fresh virtualenv, invoked the way
+    the README says - `python3 scripts/install.py` with the venv on PATH: the
+    packaging (build backend, packages.find, the console script) and the
+    script's own logic - in-checkout or clone, venv or user site, where the
+    command landed. Editable installs write into the project directory, so
     the tree is copied first; the source mount is read-only.
 
     Offline: the venv sees the image's site-packages, so every dependency is
@@ -490,7 +491,7 @@ def test_the_installer_produces_a_noesis_that_runs(tmp_path):
            "PIP_DISABLE_PIP_VERSION_CHECK": "1",
            "AGENT_HOME": str(tmp_path / "home")}
 
-    done = subprocess.run(["sh", "scripts/install.sh"], cwd=src, env=env,
+    done = subprocess.run(["python3", "scripts/install.py"], cwd=src, env=env,
                           capture_output=True, text=True, timeout=300)
 
     assert done.returncode == 0, done.stdout[-800:] + done.stderr[-800:]
@@ -504,6 +505,35 @@ def test_the_installer_produces_a_noesis_that_runs(tmp_path):
     assert doctor.stdout.strip(), doctor.stderr[-400:]
     assert all(l.startswith(("ok", "FAIL", "--")) for l in doctor.stdout.splitlines() if l.strip()), (
         "noesis ran something other than the doctor:" + doctor.stdout[:300])
+
+
+def test_the_installer_hands_over_to_the_active_venvs_own_python(tmp_path):
+    """The Windows defect the first installer shipped: a venv was active, the
+    interpreter on PATH was another one, and the install landed in a Python
+    nobody chose while reporting success. Now the script re-runs itself under
+    VIRTUAL_ENV's python before doing anything. A stand-in venv whose python
+    is a shell script records the hand-over without installing a thing."""
+    import os
+    import pathlib
+    import subprocess
+    import sys
+
+    if os.name == "nt":
+        pytest.skip("the installer is verified by hand on Windows; see the changelog")
+    root = pathlib.Path(__file__).resolve().parent.parent
+    fake = tmp_path / "venv" / "bin"
+    fake.mkdir(parents=True)
+    stub = fake / "python"
+    stub.write_text("#!/bin/sh\necho \"handed over to $0 $*\"\n", encoding="utf-8")
+    stub.chmod(0o755)
+
+    done = subprocess.run([sys.executable, str(root / "scripts" / "install.py")],
+                          cwd=tmp_path, env={**os.environ, "VIRTUAL_ENV": str(tmp_path / "venv")},
+                          capture_output=True, text=True, timeout=60)
+
+    assert done.returncode == 0, done.stderr[-400:]
+    assert f"handed over to {stub} {root / 'scripts' / 'install.py'}" in done.stdout
+    assert "installing from" not in done.stdout, "it must not install under the wrong python"
 
 
 def test_bare_noesis_opens_the_tui(tmp_path, monkeypatch):
