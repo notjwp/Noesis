@@ -52,8 +52,9 @@ class SetupScreen(Screen):
     def compose(self) -> ComposeResult:
         with Vertical(id="setup"):
             yield Label("NOESIS  ·  setup", id="setup-title")
-            yield Static("verified against the live endpoint before it is "
-                         "saved  ·  ^q leaves", classes="hint")
+            yield Static("\u2191\u2193 choose  ·  enter moves on  ·  verified against "
+                         "the live endpoint before it is saved  ·  ^q leaves",
+                         classes="hint")
             yield OptionList(*self._options(), id="choices")
             yield Static("", id="warning")
             yield Input(placeholder="base URL, e.g. https://openrouter.ai/api/v1",
@@ -111,6 +112,27 @@ class SetupScreen(Screen):
     @on(OptionList.OptionHighlighted, "#choices")
     def _highlighted(self, event: OptionList.OptionHighlighted) -> None:
         self.choose(event.option_index)
+
+    # Enter walks the form: row -> (base URL -> model id ->) key -> verify.
+    # Measured: with only Tab between the list and the key box, and no hint,
+    # the first person to open it could not find a way to type a key.
+    @on(OptionList.OptionSelected, "#choices")
+    def _selected(self) -> None:
+        self.choose(self.query_one("#choices", OptionList).highlighted or 0)
+        first = "#base-url" if not setup.CHOICES[self._index].model else "#key"
+        self.query_one(first, Input).focus()
+
+    @on(Input.Submitted, "#base-url")
+    def _after_base_url(self) -> None:
+        self.query_one("#model-id", Input).focus()
+
+    @on(Input.Submitted, "#model-id")
+    def _after_model_id(self) -> None:
+        self.query_one("#key", Input).focus()
+
+    @on(Input.Submitted, "#key")
+    def _after_key(self) -> None:
+        self._verify()
 
     def key_in_hand(self) -> str:
         """What was typed, or the key already configured. §6.7: changing the

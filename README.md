@@ -33,18 +33,22 @@ Python 3.12+ and git. No Docker, no VM, nothing else. One line:
 
 ```bash
 # macOS, Linux
-git clone https://github.com/notjwp/Noesis.git && cd Noesis && python3 scripts/install.py
+git clone --filter=blob:none --sparse https://github.com/notjwp/Noesis.git && cd Noesis && python3 install.py
 ```
 
 ```powershell
 # Windows (PowerShell; in cmd, join with && instead of ;)
-git clone https://github.com/notjwp/Noesis.git; cd Noesis; python scripts/install.py
+git clone --filter=blob:none --sparse https://github.com/notjwp/Noesis.git; cd Noesis; python install.py
 ```
 
 The script installs into your active virtualenv if you have one, otherwise your user site — never
 the system Python — and ends by telling you where the `noesis` command landed and whether it is
 on your PATH. If a virtualenv is active, it installs there even when the `python` you typed is a
 different one.
+
+The clone is partial and sparse: it brings down the agent and its prompts, about 1 MB, and leaves
+the evaluation's vendored repositories on the server. `git clone` without the flags works too
+and gets you the whole thing, 29 MB, which is what a developer wants.
 
 Not `curl | sh`, deliberately. The agent's own policy gate would refuse that shape, and an
 installer it ships should be one it would run.
@@ -211,7 +215,7 @@ place Docker is needed.
 ```bash
 docker build -f Containerfile -t personal-agent .
 
-# 1,195 offline tests - no API key, no network
+# 1,197 offline tests - no API key, no network
 docker run --rm --network none --read-only --tmpfs /tmp:exec \
   -v "$PWD:/app:ro" -v "$PWD/eval/workspace:/workspace" \
   -v "$PWD/.agent/homes/_t:/state" personal-agent python -m pytest -q

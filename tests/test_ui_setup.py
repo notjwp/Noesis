@@ -373,6 +373,48 @@ def rendered(app) -> str:
                      in app.screen._compositor.render_strips())
 
 
+def test_enter_walks_from_the_list_to_the_key_box_and_verifies(monkeypatch, env_file, no_keys):
+    """Measured on the first real open: arrows moved the highlight, Enter did
+    nothing, typing did nothing, and nothing said Tab. Enter on a row lands
+    in the key box; Enter in the key box is the verify button."""
+    from textual.widgets import Input, OptionList
+
+    app = screen_app(monkeypatch, "misconfigured", "401 invalid api key")
+
+    async def script(pilot):
+        assert isinstance(app.screen.focused, OptionList)
+        await pilot.press("enter")
+        assert app.screen.focused is app.screen.query_one("#key", Input)
+        await pilot.press(*"nvapi-test")
+        await pilot.press("enter")
+        await pilot.pause()
+        await app.workers.wait_for_complete()
+
+    drive(app, script)
+    assert app.asked and app.asked[0][3] == "nvapi-test", app.asked
+
+
+def test_enter_walks_a_custom_endpoint_through_all_three_boxes(monkeypatch, env_file, no_keys):
+    """The custom row shows two more boxes; Enter visits them in order."""
+    from textual.widgets import Input
+
+    app = screen_app(monkeypatch, "misconfigured", "401")
+    custom = next(i for i, c in enumerate(setup.CHOICES) if not c.model)
+
+    async def script(pilot):
+        for _ in range(custom):
+            await pilot.press("down")
+        await pilot.press("enter")
+        assert app.screen.focused is app.screen.query_one("#base-url", Input)
+        await pilot.press(*"http://localhost:11434/v1", "enter")
+        assert app.screen.focused is app.screen.query_one("#model-id", Input)
+        await pilot.press(*"qwen", "enter")
+        assert app.screen.focused is app.screen.query_one("#key", Input)
+
+    drive(app, script)
+    assert app.asked == []
+
+
 def test_a_rejected_key_is_not_saved(monkeypatch, env_file, no_keys):
     saved = []
     monkeypatch.setattr(setup, "write_env", lambda pairs, path=None:

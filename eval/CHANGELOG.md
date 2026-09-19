@@ -5,6 +5,61 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## The setup wizard: Enter did nothing, and nothing said Tab (2026-09-19)
+
+**Not a tuning cycle.** The TUI's first screen.
+
+Reported on the first real open, with screenshots: the arrows moved the
+highlight between models, and that was all anyone could do. Enter on a row
+did nothing. Typing did nothing, because the list had focus. The hint said
+"^q leaves" and nothing else. The only path to the key box was Tab, then
+Tab again to the button - and no line on the screen said so. A wizard whose
+one job is to take a key, and the key could not be typed.
+
+Now Enter walks the form: a row -> the key box (or, for the custom row, the
+base URL -> the model id -> the key), and Enter in the key box IS the verify
+button. The hint reads `up/down choose - enter moves on - verified against
+the live endpoint before it is saved - ^q leaves`. Tab still works.
+
+Two pilot tests drive the keys and assert where focus lands and that the
+probe receives the typed key; with both handlers removed, both are red.
+1,195 -> 1,197 tests.
+
+## The install clones 1 MB, not 29: sparse and partial, with the installer at the root (2026-09-19)
+
+**Not a tuning cycle.** No loop code.
+
+A person installing the agent needs `agent/` (what pip installs) and
+`prompts/` (read by path). 1,673 of the 1,746 tracked files are under
+`eval/` - six vendored repositories and the fixtures - and a plain clone
+downloads all of it. Measured from GitHub: a full clone is **29 MB** on
+disk; `--filter=blob:none --sparse` followed by `sparse-checkout set agent
+prompts scripts` is **about 1**.
+
+The catch: a `--sparse` clone checks out only the root, so a
+`scripts/install.py` is not there to run. Two ways out - the sparse step in
+the one-liner, or the installer at the root doing it. The root: the install
+line is what people copy from a website, and the moment a fourth directory
+is needed, every published copy of a line carrying `sparse-checkout set`
+is stale; a file the repository controls is not. So `install.py` moved from
+`scripts/` to the root, and the line is
+
+```
+git clone --filter=blob:none --sparse https://github.com/notjwp/Noesis.git && cd Noesis && python3 install.py
+```
+
+with `;` and `python` on Windows as before. The installer widens the sparse
+set only when the checkout IS sparse (`core.sparseCheckout`), so a
+developer's full clone is untouched; when it does the clone itself, it
+clones the same way. `noesis --update` is `git pull --ff-only` and
+`git diff --name-only`, both fine in a sparse partial clone.
+
+Proven: the end-to-end test now builds a repository from a copy of the tree,
+clones it `--sparse`, asserts the clone holds only the root, runs
+`python3 install.py`, and asserts `agent/` and `prompts/` appeared and
+`tests/` did not; by hand on Windows in PowerShell the same way. 1,195
+tests, unchanged in count.
+
 ## The home defaults to ~/.noesis: the old default was a first-run traceback on macOS and Linux (2026-09-19)
 
 **Not a tuning cycle.** One default, one doctor line.
