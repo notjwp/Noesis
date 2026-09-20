@@ -5,6 +5,74 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## The replication: 9/18, the token growth is real, and the loop code is not the cause (2026-09-19)
+
+**Not a tuning cycle.** The pre-registered replication of the morning's
+re-baseline, on identical loop code, run `20260919T082521Z`, 18 rows, 0
+blocked, 0 tampered. Condition set before launch: median tokens >= 350k and
+`budget` >= 8/18 again means the growth is real; if it drops back near 240k
+the morning was noise.
+
+### The number
+
+**9/18.** Three 3-run passes on effectively the same code now read 10, 11, 9:
+flat, and the spread is the seed. `humanize` 0/3 (the morning's 1/3 was a
+seed, as read), `rich` 0/3 again - 0, 1, 0, 0 across four passes, every
+loss `budget`. `more-itertools` 3/3, `cachetools` 2/3 (its first loss since
+09-03), `click` 1/3, `markdown` 3/3. README and CLAUDE.md quote the LATEST
+measured number, 9/18, with the three beside it; quoting the 11 would be
+picking the better of three identical runs.
+
+### The condition was met - and the reading of it was wrong
+
+Median **389,942**, `budget` **9/18**. Real, replicated. But the morning's
+reading - "passes that do not terminate, so the bucket is `reflect`" - did
+not replicate: passes that failed to say `done` were **1 of 9** here against
+5 of 11 in the morning. Not `reflect`.
+
+What the two passes agree on, once the two cases that never pass are set
+apart from the four that can:
+
+```
+                         09-03    09-12    09-19am   09-19pm
+four winnable: pass       9/12     7/8      10/12     9/12
+their budget verdicts      1        1         4         3
+their median tokens      182k     155k      306k      229k
+rich + humanize          ~400k, budget, every pass, every time
+```
+
+The winnable cases got dearer, in both passes, by more turns spent reading
+before the first edit: `cachetools` 142k -> 408k between passes, `click`
+at ~380k regardless. Tokens per turn are flat across all four passes
+(11.6k, 13.1k, 13.4k, 13.6k); turns are what grew.
+
+### The loop code is identical
+
+The 09-12 pass (155k on the winnable four) ran at `61ba6fb` plus the
+then-uncommitted compaction bound and `read_file` floor - that is,
+`e65d94b`. `git diff e65d94b..f71efe2` over `agent/graph.py`, `context.py`,
+`provider.py`, `tools.py`, `config.py`, `prompts/`, `eval/harness.py` and
+`eval/fixtures/real-*` is docstrings and the `SKILL_REVISION` default -
+which the harness sets explicitly where measured, and no skill loaded in
+any of these runs (`skill_index_chars` 1,224 in all). The gate's new rules
+escalated 0 of 409 calls. Nothing in this repository moved the number.
+
+That leaves the endpoint: the same model id serving something that reads
+more before it edits. The standing lesson is "caps derived against one
+model are a confound when you swap the model" - here nobody swapped it.
+
+### What is recorded, and what is next
+
+- `real` **9/18**; 10, 11, 9 across three 3-run passes; flat.
+- median tokens ~390-400k on this endpoint now, against ~240k on 09-12;
+  real, replicated, not caused by anything in the tree.
+- **Next, before any tuning: the control.** Check out `e65d94b` and run
+  `real` on it now. Near 400k rules the repository out outright; near 155k
+  means something in the "cosmetic" diff is not. A day of quota. Tuning the
+  loop against an endpoint that drifted is the mistake the lessons list
+  already paid for once.
+- Nothing kept, nothing reverted. No code in this entry.
+
 ## The setup wizard: Enter did nothing, and nothing said Tab (2026-09-19)
 
 **Not a tuning cycle.** The TUI's first screen.

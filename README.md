@@ -47,8 +47,9 @@ on your PATH. If a virtualenv is active, it installs there even when the `python
 different one.
 
 The clone is partial and sparse: it brings down the agent and its prompts, about 1 MB, and leaves
-the evaluation's vendored repositories on the server. `git clone` without the flags works too
-and gets you the whole thing, 29 MB, which is what a developer wants.
+the evaluation's vendored repositories on the server. The dependencies pip installs are the bulk
+of it, about 130 MB into your virtualenv or user site - the same either way. `git clone` without
+the flags works too and gets you the whole checkout, 29 MB, which is what a developer wants.
 
 Not `curl | sh`, deliberately. The agent's own policy gate would refuse that shape, and an
 installer it ships should be one it would run.
@@ -193,15 +194,15 @@ Current numbers, on `nvidia/nemotron-3-super-120b-a12b` at the free tier:
 |---|---|---|
 | dev | bug fixes in small projects | **15/15** |
 | held out | the same, on cases never tuned against | **30/30** |
-| real repositories | six real projects, real bugs | **11/18** |
+| real repositories | six real projects, real bugs | **9/18** |
 | tools | long-running processes, asking the user | **9/9** |
 | search / web | finding things out | **9/9** · **18/18** |
 | memory recall | remembering across sessions | **85.7%** |
 | skills | loading the right procedure | **94.4%** |
 
 The `real` split is the only one with headroom, and it has been flat since early September across
-every loop change since — 10/18, then 11/18 on a re-run with nothing changed — which is recorded as
-flat, not as progress.
+every loop change since — 10, 11 and 9 of 18 across three runs of the same code — which is recorded
+as flat, not as progress. Two of its six cases have never passed on this model.
 
 ## Running the evaluation
 
