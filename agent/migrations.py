@@ -97,6 +97,13 @@ MEMORY: list[tuple[str, list[str]]] = [
                )""",
         ],
     ),
+    (
+        # v5: and dropped again 2026-09-23 with Phase R. v4 STAYS - apply()
+        # indexes plan[version:] by position, so removing it would renumber
+        # every later migration and re-run them on databases already past it.
+        "drop_skill_failures",
+        ["DROP TABLE IF EXISTS skill_failures"],
+    ),
 ]
 
 TASKS: list[tuple[str, list[str]]] = [

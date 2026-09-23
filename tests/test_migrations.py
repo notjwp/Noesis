@@ -130,6 +130,36 @@ def test_migrations_apply_in_order_from_any_starting_version(tmp_workspace):
     conn.close()
 
 
+def test_a_database_at_v4_loses_the_phase_r_table(tmp_workspace):
+    """Phase R was deleted 2026-09-23 and its store with it. v4 STAYS in the plan
+    - apply() indexes plan[version:] by position, so removing it would renumber
+    every later migration and re-run them on a database already past it. v5 drops
+    the table instead, and a store that has been carrying rows must come up clean.
+    """
+    import sqlite3
+
+    from agent import config, memory, migrations
+
+    config.MEMORY_DB.parent.mkdir(parents=True, exist_ok=True)
+    old = sqlite3.connect(str(config.MEMORY_DB))
+    migrations.apply(old, migrations.MEMORY[:4])          # the world before v5
+    old.execute("INSERT INTO skill_failures (skill, goal, verdict, at) "
+                "VALUES ('deploy-guide', 'ship it', 'stuck', 1.0)")
+    old.commit()
+    assert old.execute("PRAGMA user_version").fetchone()[0] == 4
+    old.close()
+
+    conn = memory._connect()
+    try:
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == len(
+            migrations.MEMORY)
+        gone = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='skill_failures'").fetchone()
+        assert gone is None, "the suspect store survived the migration"
+    finally:
+        conn.close()
+
+
 def test_the_version_is_the_list_length(tmp_workspace):
     """The index IS the version, so appending is the only legal edit. A migration
     inserted in the middle would renumber every one after it and silently skip

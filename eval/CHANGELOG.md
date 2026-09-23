@@ -5,6 +5,64 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## Phase R deleted: the defect was in retrieval, not in correction (2026-09-23)
+
+**A cycle, pre-registered and NOT yet measured** - the code and the paperwork
+are here; the three splits run when there is quota.
+
+### What R was, and why it went
+
+A skill open when a run ended `stuck`/`budget` (or on a 3-failure streak) was
+marked suspect in `memory.skill_failures`; the next run that ended `done`
+overwrote its body with the closest document read. The trigger is a judgement
+and the judgement was wrong, measured: **R marked on 7 runs and 6 of them
+PASSED**. It has been off by default since 2026-09-13 and has never run in real
+use. Removing the token budget the same week weakened it further - the `budget`
+verdict no longer exists.
+
+### The fixture says the correction was never the missing piece
+
+`skill-correction`: session 1 learns `conventions` from CONVENTIONS.md (suffix
+`-slate`), session 3 reads RUNBOOK.md (`-zr7k2q`), session 4 must cut a release
+from the library alone. With R OFF, extraction already writes `runbook` as a
+sibling - **the library ends correct**. The control arm scored 1/3 because
+`best_match` returns None when two skills tie, and `conventions` and `runbook`
+tie on "Cut release 2.3.", so NOTHING was injected. The bad skill was not
+winning; neither was winning.
+
+### What replaced it
+
+- `_read()` carries `written`, the mtime of SKILL.md. No store, no schema - the
+  filesystem already records it.
+- `best_match()` takes every name at the top score; one skill strictly newer
+  wins; equal write times still return None. The amended rule is not arbitrary -
+  the newer skill was written from the more recently read document, which is the
+  better evidence - and the old comment ("injecting the WRONG skill is worse than
+  injecting none") survives in the equal-time branch.
+- Deleted: `memory.mark_suspect/is_suspect/clear_suspect`, the reflect trigger,
+  the `correcting` branch and `_closest` in `skills.extract`, `config.SKILL_REVISION`
+  and the harness's `revision` field. `skill_failures` is dropped by **migration
+  v5** - v4 STAYS, because `apply()` indexes `plan[version:]` by position and
+  removing it would renumber every later migration and re-run them.
+
+1,200 -> 1,184 tests, ~280 lines removed. The tie-break is mutation-checked:
+restore `return None` and `test_a_tie_goes_to_the_most_recently_written` is red.
+
+### Pre-registered, before the splits run
+
+- **`revision` 3/3** is the bar. The control scored 1/3, the old mechanism 3/3.
+  Below 3/3 this is reverted.
+- **Guards, both must hold**: `skills` **18/18**, `authoring` **11/11**. A
+  recency tie-break changes matching for every library, not just this fixture.
+- **Verified in the FILES, not the score**: after session 4 the library holds
+  BOTH skills, `conventions` still carries `-slate`, and the trace shows
+  `runbook` injected. A pass with `conventions` injected is a pass for the wrong
+  reason.
+
+Not in this cycle: refreshing a skill from its own source when that document
+changes. That is staleness rather than supersession, it needs provenance stored
+per skill, and no fixture measures it.
+
 ## No token budget: the cap was ending runs that had already finished the work (2026-09-23)
 
 **Not a tuning cycle, and not measured.** A cap removed, on request, with the

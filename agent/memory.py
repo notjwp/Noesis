@@ -382,50 +382,6 @@ def write_now(goal: str, verdict: str | None, plan: list[str], cursor: int,
     return body
 
 
-# ------------------------------------------------- the suspect mark (Phase R)
-#
-# A skill that was open when a run failed is SUSPECT, and the next run that
-# succeeds replaces it. No judgement is stored here and none is made: the mark is
-# a fact about a run, and `skills.extract` consumes it by a rule.
-#
-# All three swallow sqlite3.Error on purpose. This is bookkeeping at the end of a
-# session that may already have succeeded, and a store that cannot be written must
-# not turn a passing run into a crashed one - the rule `skills.extract` follows.
-
-def mark_suspect(skill: str, goal: str, verdict: str) -> None:
-    """Record that `skill` was open when a run ended badly. Never raises."""
-    try:
-        with _connect() as conn:
-            conn.execute(
-                "INSERT INTO skill_failures (skill, goal, verdict, at) "
-                "VALUES (?, ?, ?, ?) "
-                "ON CONFLICT(skill) DO UPDATE SET goal = excluded.goal, "
-                "verdict = excluded.verdict, at = excluded.at",
-                (skill, goal[:500], verdict, time.time()))
-    except sqlite3.Error:
-        pass
-
-
-def is_suspect(skill: str) -> bool:
-    """Whether `skill` is waiting to be replaced. False on any store error."""
-    try:
-        with _connect() as conn:
-            found = conn.execute(
-                "SELECT 1 FROM skill_failures WHERE skill = ?", (skill,)).fetchone()
-        return found is not None
-    except sqlite3.Error:
-        return False
-
-
-def clear_suspect(skill: str) -> None:
-    """Drop the mark. A skill that was never marked is an ordinary case here."""
-    try:
-        with _connect() as conn:
-            conn.execute("DELETE FROM skill_failures WHERE skill = ?", (skill,))
-    except sqlite3.Error:
-        pass
-
-
 def remember(note: str) -> str:
     """Append a durable fact about the user to AGENT.md.
 

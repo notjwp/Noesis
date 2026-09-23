@@ -113,7 +113,12 @@ def _read(directory: Path) -> dict | None:
         # Without a description there is nothing to match on, so the skill could
         # never be chosen anyway. Dropping it keeps the index honest.
         return None
-    return {"name": name, "description": description, "body": body, "dir": directory}
+    try:
+        written = path.stat().st_mtime
+    except OSError:
+        return None
+    return {"name": name, "description": description, "body": body,
+            "dir": directory, "written": written}
 
 
 def catalogue() -> dict[str, dict]:
@@ -219,9 +224,17 @@ def best_match(goal: str) -> dict | None:
     if not scores:
         return None
     ranked = sorted(scores.items(), key=lambda kv: -kv[1])
-    if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
-        return None                       # a tie is not a match
-    return entries[ranked[0][0]]
+    top = [name for name, score in ranked if score == ranked[0][1]]
+    if len(top) == 1:
+        return entries[top[0]]
+    # AMENDED 2026-09-23: a tie goes to the skill written most recently, which is
+    # the one made from the most recently read document. `conventions` (stale) and
+    # `runbook` (current) tie on "Cut release 2.3." and returning None there
+    # injected NOTHING - the 1/3 the revision control arm scored.
+    newest = sorted(top, key=lambda name: -entries[name]["written"])
+    if entries[newest[0]]["written"] == entries[newest[1]]["written"]:
+        return None                       # written together: still not a match
+    return entries[newest[0]]
 
 
 def opening(goal: str) -> str:
@@ -510,8 +523,7 @@ def _when(path: str, body: str) -> str:
             f"creating or changing files.")
 
 
-def extract(messages: list[dict], goal: str, verdict: str = "",
-            opened: str = "") -> list[str]:
+def extract(messages: list[dict], goal: str) -> list[str]:
     """Write a skill from each reference document the agent read. Returns slugs.
 
     Phase O-redux. `learn` asks the MODEL to decide what is worth keeping, and the
@@ -524,37 +536,19 @@ def extract(messages: list[dict], goal: str, verdict: str = "",
     """
     if not config.SKILL_EXTRACTION:
         return []
-    # Phase R. A skill that was open when a run failed is marked suspect; the
-    # first usable document of the next run that SUCCEEDS replaces it, under the
-    # suspect skill's name rather than the document's. Naming it for the document
-    # would write a sibling and leave the bad skill matching goals - which is the
-    # gap, not the missing permission: `learn` has always allowed a rewrite.
-    correcting = bool(config.SKILL_REVISION and verdict == "done" and opened
-                      and memory.is_suspect(opened))
     usable = []
     for path, content in read_but_not_edited(messages):
         body = _undecorate(content)[:config.EXTRACT_MAX_CHARS]
         if _is_document(path) and len(body) >= config.EXTRACT_MIN_CHARS:
             usable.append((path, body))
-    # The replacement is the document that describes the SAME work, not the
-    # first one read: by order, a tooling script's docstring replaced a release
-    # checklist 1 time in 3 (2026-09-11).
-    replacement = _closest(opened, usable) if correcting else None
     written = []
     for path, body in usable:
         stem = path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
-        corrects = correcting and path == replacement
         try:
-            learn(name=opened if corrects else stem,
-                  description=_when(path, body), body=body)
+            learn(name=stem, description=_when(path, body), body=body)
         except ValueError:
             # The library cap, or a name that slugs to nothing. Both are ordinary
             # outcomes here, not failures of the run.
-            continue
-        if corrects:
-            memory.clear_suspect(opened)
-            written.append(_slug(opened))
-            correcting = False           # one correction per session
             continue
         written.append(_slug(stem))
     return written
@@ -571,21 +565,6 @@ def _is_document(path: str) -> bool:
     name = path.rsplit("/", 1)[-1]
     suffix = name[name.rfind("."):].lower() if "." in name[1:] else ""
     return suffix in DOCUMENT_SUFFIXES and name.lower() not in NOT_DOCUMENTS
-
-
-def _closest(name: str, candidates: list[tuple[str, str]]) -> str:
-    """The candidate path whose derived description best overlaps the skill's
-    own. Words of three letters or more, the same cut best_match uses; the
-    template words every _when() shares cancel out. Ties keep read order."""
-    current = catalogue().get(_slug(name), {}).get("description", "")
-    words = lambda t: {w for w in "".join(c if c.isalnum() else " " for c in t).lower().split() if len(w) > 2}
-    have = words(current)
-    best, score = candidates[0][0] if candidates else "", -1
-    for path, body in candidates:
-        n = len(have & words(_when(path, body)))
-        if n > score:
-            best, score = path, n
-    return best
 
 
 LEARN_SCHEMA = {

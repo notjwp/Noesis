@@ -578,8 +578,23 @@ def test_an_unrelated_goal_matches_NOTHING(tmp_path, monkeypatch):
     assert skills.best_match('Write a shopping list to notes.txt') is None
 
 
-def test_a_tie_is_not_a_match(tmp_path, monkeypatch):
-    """Two skills equally entitled to the goal: inject neither.
+def _written_at(root, name, when):
+    """Set one skill's write time. Recency is the tie-break, and a test that
+    leaves it to how fast the filesystem ticks is a test that flaps."""
+    import os
+
+    path = root / name / 'SKILL.md'
+    os.utime(path, (when, when))
+
+
+def test_a_tie_goes_to_the_most_recently_written(tmp_path, monkeypatch):
+    """Two skills equally entitled to the goal: the newer one wins.
+
+    AMENDED 2026-09-23. This asserted None - "a tie is not a match" - and that
+    rule is what made the revision split's control arm score 1/3: `conventions`
+    (stale) and `runbook` (current) tie on "Cut release 2.3." and NOTHING was
+    injected. The newer skill was written from the more recently read document,
+    which is the better evidence.
 
     SIX skills, not two. With two, `spread` for the shared word is 2 and the
     ceiling is 1, so the word is dropped as furniture and the function returns
@@ -588,13 +603,36 @@ def test_a_tie_is_not_a_match(tmp_path, monkeypatch):
     """
     from agent import skills
 
-    _library(tmp_path, monkeypatch,
-             ('alpha-thing', 'Use when polishing a widget.'),
-             ('beta-thing', 'Use when polishing a widget.'),
-             ('gamma-one', 'Use when filing invoices.'),
-             ('delta-one', 'Use when booking travel.'),
-             ('epsilon-one', 'Use when drafting letters.'),
-             ('zeta-one', 'Use when sorting photographs.'))
+    root = _library(tmp_path, monkeypatch,
+                    ('alpha-thing', 'Use when polishing a widget.'),
+                    ('beta-thing', 'Use when polishing a widget.'),
+                    ('gamma-one', 'Use when filing invoices.'),
+                    ('delta-one', 'Use when booking travel.'),
+                    ('epsilon-one', 'Use when drafting letters.'),
+                    ('zeta-one', 'Use when sorting photographs.'))
+    _written_at(root, 'alpha-thing', 1_000_000)
+    _written_at(root, 'beta-thing', 2_000_000)
+
+    assert skills.best_match('polishing a widget')['name'] == 'beta-thing'
+
+
+def test_two_skills_written_at_the_same_moment_are_still_no_match(
+        tmp_path, monkeypatch):
+    """Recency breaks a tie; it does not abolish one. Without this the amendment
+    above becomes "always inject something", and injecting the WRONG skill is
+    worse than injecting none - the agent then follows a convention that does
+    not apply."""
+    from agent import skills
+
+    root = _library(tmp_path, monkeypatch,
+                    ('alpha-thing', 'Use when polishing a widget.'),
+                    ('beta-thing', 'Use when polishing a widget.'),
+                    ('gamma-one', 'Use when filing invoices.'),
+                    ('delta-one', 'Use when booking travel.'),
+                    ('epsilon-one', 'Use when drafting letters.'),
+                    ('zeta-one', 'Use when sorting photographs.'))
+    _written_at(root, 'alpha-thing', 1_500_000)
+    _written_at(root, 'beta-thing', 1_500_000)
 
     assert skills.best_match('polishing a widget') is None
 
@@ -672,35 +710,6 @@ def _read_but_not_edited(path, text):
     ]
 
 
-def _revising(monkeypatch):
-    from agent import config
-
-    monkeypatch.setattr(config, 'SKILL_EXTRACTION', True)
-    monkeypatch.setattr(config, 'SKILL_REVISION', True)
-
-
-def test_a_suspect_skill_is_REPLACED_by_the_method_that_worked(monkeypatch):
-    """Correction is by replacement, and the NAME is the whole point: `extract`
-    names a skill after the DOCUMENT it read, so without this a better document
-    writes a SECOND skill and leaves the bad one matching goals and being injected."""
-    from agent import memory, skills
-
-    _revising(monkeypatch)
-    skills.learn(name='deploy-guide', description='Use when deploying.',
-                 body='Run deploy.sh and hope for the best. ' * 10)
-    memory.mark_suspect('deploy-guide', goal='ship it', verdict='stuck')
-
-    written = skills.extract(
-        _read_but_not_edited('runbook.md',
-                             'Tag the commit, then run deploy.sh --verify. ' * 10),
-        goal='ship it', verdict='done', opened='deploy-guide')
-
-    assert written == ['deploy-guide']
-    assert 'deploy.sh --verify' in skills.load_skill('deploy-guide')
-    assert memory.is_suspect('deploy-guide') is False
-    assert 'runbook' not in skills.authored(), 'corrected in place, not duplicated'
-
-
 def _read_several(*docs):
     """Several documents read and never written, in the order given. The result
     carries read_file's real header, which _undecorate strips - without it the
@@ -718,106 +727,3 @@ def _read_several(*docs):
                  'content': f"{path} (lines 1-{n} of {n})" + chr(10) + text}]},
         ]
     return out
-
-
-def test_the_replacement_is_the_document_that_describes_the_SAME_work(monkeypatch):
-    """Measured 2026-09-11, skill-correction run 1: the suspect `conventions`
-    (a release checklist) was replaced by ship.py's docstring - "Project
-    tooling. Not documentation." - because extract handed the suspect's name to
-    the FIRST document in iteration order, and RUNBOOK.md went to a sibling.
-    Right 2 of 3. The replacement for a skill is the candidate that describes
-    the same class of work, ranked by overlap with the suspect's own
-    description - the words best_match already scores on."""
-    from agent import memory, skills
-
-    _revising(monkeypatch)
-    skills.learn(name='conventions',
-                 description='Use when release checklist applies to the work in '
-                             'hand - project conventions, formats and rules '
-                             'recorded in CONVENTIONS.md.',
-                 body='# Release checklist' + chr(10) + 'Write VERSION with the -old suffix. ' * 8)
-    memory.mark_suspect('conventions', goal='Cut release 2.2', verdict='stuck')
-
-    written = skills.extract(_read_several(
-        ('ship.py', '"""Project tooling. Not documentation.' + chr(10)
-                    + 'import hashlib' + chr(10) + 'ACCEPTED = "abc" ' * 12),
-        ('RUNBOOK.md', '# Release checklist' + chr(10)
-                       + 'Write VERSION with the -zr7k2q suffix, then run ship.py. ' * 6),
-        ('VERSION', '2.0 ' * 40),
-    ), goal='Cut release 2.2', verdict='done', opened='conventions')
-
-    body = skills.load_skill('conventions')
-    assert 'zr7k2q' in body, 'the checklist should have replaced the checklist'
-    assert 'Project tooling' not in body, 'the first-read document won by order'
-    assert 'runbook' not in skills.authored(), 'corrected in place, not duplicated'
-    assert 'ship' not in skills.authored(), 'a source file is not a document'
-
-
-def test_a_skill_that_is_not_suspect_is_never_overwritten(monkeypatch):
-    """The guard. Without it every successful run rewrites whatever was injected,
-    which is churn and not correction."""
-    from agent import skills
-
-    _revising(monkeypatch)
-    skills.learn(name='deploy-guide', description='Use when deploying.',
-                 body='The good version, left alone. ' * 10)
-
-    skills.extract(_read_but_not_edited('runbook.md', 'Something else entirely. ' * 10),
-                   goal='ship it', verdict='done', opened='deploy-guide')
-
-    assert 'The good version' in skills.load_skill('deploy-guide')
-
-
-def test_correction_needs_a_run_that_actually_SUCCEEDED(monkeypatch):
-    """A second failure is not evidence of the right answer."""
-    from agent import memory, skills
-
-    _revising(monkeypatch)
-    skills.learn(name='deploy-guide', description='Use when deploying.',
-                 body='Run deploy.sh and hope for the best. ' * 10)
-    memory.mark_suspect('deploy-guide', goal='ship it', verdict='stuck')
-
-    skills.extract(_read_but_not_edited('runbook.md', 'Tag, then deploy --verify. ' * 10),
-                   goal='ship it', verdict='stuck', opened='deploy-guide')
-
-    assert 'hope for the best' in skills.load_skill('deploy-guide')
-    assert memory.is_suspect('deploy-guide') is True
-
-
-def test_the_control_arm_never_corrects(monkeypatch):
-    """AGENT_SKILL_REVISION=off has to change the MECHANISM. Two arms of one build
-    is two controls, and the comparison says nothing."""
-    from agent import config, memory, skills
-
-    _revising(monkeypatch)
-    monkeypatch.setattr(config, 'SKILL_REVISION', False)
-    skills.learn(name='deploy-guide', description='Use when deploying.',
-                 body='Run deploy.sh and hope for the best. ' * 10)
-    memory.mark_suspect('deploy-guide', goal='ship it', verdict='stuck')
-
-    skills.extract(_read_but_not_edited('runbook.md', 'Tag, then deploy --verify. ' * 10),
-                   goal='ship it', verdict='done', opened='deploy-guide')
-
-    assert 'hope for the best' in skills.load_skill('deploy-guide')
-
-
-def test_only_ONE_skill_is_corrected_per_session(monkeypatch):
-    """Two documents read in a correcting session must not both land on the suspect
-    name - the second would immediately overwrite the first."""
-    from agent import memory, skills
-
-    _revising(monkeypatch)
-    skills.learn(name='deploy-guide', description='Use when deploying.',
-                 body='Run deploy.sh and hope for the best. ' * 10)
-    memory.mark_suspect('deploy-guide', goal='ship it', verdict='stuck')
-
-    messages = (_read_but_not_edited('runbook.md', 'Tag, then deploy --verify. ' * 10)
-                + _read_but_not_edited('other.md', 'A different procedure entirely. ' * 10))
-    messages[2]['content'][0]['id'] = 'b'
-    messages[3]['content'][0]['tool_use_id'] = 'b'
-
-    written = skills.extract(messages, goal='ship it', verdict='done',
-                             opened='deploy-guide')
-
-    assert written == ['deploy-guide', 'other']
-    assert 'deploy --verify' in skills.load_skill('deploy-guide')

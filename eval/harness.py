@@ -1435,7 +1435,6 @@ def record(out: Path, case: dict, run_index: int, *, passed: bool, verdict: str,
         # was off while the agent extracted. Two definitions, and the wrong one
         # is the one that survives in the row.
         "extraction": settings.SKILL_EXTRACTION,
-        "revision": settings.SKILL_REVISION,
         # Which skill the case NEEDED. Three outcomes, not two: the right one, the
         # WRONG one, or none - and the middle is invisible in a pass rate while
         # being the thing that says the descriptions do not discriminate.

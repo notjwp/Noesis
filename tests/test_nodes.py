@@ -2389,7 +2389,6 @@ def test_a_missing_prompt_file_fails_loudly(tmp_workspace, monkeypatch):
                {"configurable": {}})
 
 
-
 # ===================================================== FR-501: web_search
 #
 # "Perform web search returning ranked results with titles and URLs."
@@ -4151,9 +4150,9 @@ def test_a_trailing_dot_does_not_evade_the_name_blocklist(monkeypatch):
 
 def test_the_injected_skill_is_named_not_just_counted(tmp_workspace, monkeypatch):
     """`skill_opened` carried a character count and nothing else, so no later node
-    could say WHICH skill was injected. Phase R needs the identity: `finish` marks
-    that skill suspect when the run fails, and the eval verifies the mechanism fired
-    by matching this name against the skill written afterwards."""
+    could say WHICH skill was injected. The eval needs the identity: a pass is only
+    a pass for the right reason when the trace says which skill was in front of the
+    model."""
     from agent import skills
     from agent.graph import act
 
@@ -4166,82 +4165,6 @@ def test_the_injected_skill_is_named_not_just_counted(tmp_workspace, monkeypatch
     opened = [e for e in trace if e.get("kind") == "skill_opened"]
     assert opened, "the skill was injected and the trace does not say so"
     assert opened[0]["name"] == "qz-release"
-# =============================== finish marks a failed skill suspect (Phase R)
-
-def _finished(monkeypatch, verdict, matched="deploy-guide", failures=0, revision=True):
-    """Run `finish` with a named skill matching this goal, and return nothing.
-
-    `skills.matched` is patched rather than a library staged: what is under test is
-    the RULE finish applies, not the matcher, which test_skills covers. `revision`
-    is explicit because the default is OFF since 2026-09-13.
-    """
-    from agent import config, graph, skills
-
-    monkeypatch.setattr(config, "SKILL_REVISION", revision)
-    monkeypatch.setattr(skills, "matched", lambda goal: matched)
-    monkeypatch.setattr(skills, "extract",
-                        lambda *a, **k: [])          # R2 is a separate rule
-    graph.finish(state(verdict=verdict, failures=failures),
-                 {"configurable": {"thread_id": "t1", "trace": []}})
-
-
-def test_finish_marks_the_open_skill_when_the_run_ends_badly(tmp_workspace,
-                                                             monkeypatch):
-    from agent import memory
-
-    _finished(monkeypatch, "stuck")
-
-    assert memory.is_suspect("deploy-guide") is True
-
-
-def test_finish_marks_on_budget_too_not_only_stuck(tmp_workspace, monkeypatch):
-    """`budget` is the other way a run ends without finishing. Leaving it out would
-    make the mark depend on WHICH cap bound, which says nothing about the skill."""
-    from agent import memory
-
-    _finished(monkeypatch, "budget")
-
-    assert memory.is_suspect("deploy-guide") is True
-
-
-def test_finish_marks_when_the_run_kept_failing_even_if_it_ended_done(tmp_workspace,
-                                                                      monkeypatch):
-    """Three consecutive failed calls is the third trigger."""
-    from agent import memory
-
-    _finished(monkeypatch, "done", failures=3)
-
-    assert memory.is_suspect("deploy-guide") is True
-
-
-def test_finish_does_NOT_mark_a_skill_on_a_run_that_worked(tmp_workspace, monkeypatch):
-    from agent import memory
-
-    _finished(monkeypatch, "done")
-
-    assert memory.is_suspect("deploy-guide") is False
-
-
-def test_a_bad_run_with_NO_skill_open_marks_nothing(tmp_workspace, monkeypatch):
-    """A failure with no skill injected is a failure, not evidence about a skill."""
-    from agent import memory
-
-    _finished(monkeypatch, "stuck", matched="")
-
-    assert memory._connect().execute(
-        "SELECT count(*) FROM skill_failures").fetchone()[0] == 0
-
-
-def test_the_control_arm_marks_nothing(tmp_workspace, monkeypatch):
-    """AGENT_SKILL_REVISION=off must change the mechanism, or the two eval arms are
-    the same build measured twice."""
-    from agent import memory
-
-    _finished(monkeypatch, "stuck", revision=False)
-
-    assert memory.is_suspect("deploy-guide") is False
-
-
 def test_a_missing_ddgs_says_so_instead_of_raising_ModuleNotFoundError(monkeypatch):
     """Measured in the TUI: web_search failed at 0.0s with a bare
     ModuleNotFoundError, because `ddgs` was installed in the Containerfile and

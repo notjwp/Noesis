@@ -680,7 +680,7 @@ def _recorded(tmp_path, monkeypatch, **env):
 
     import eval.harness as h
 
-    for name in ("AGENT_SKILL_EXTRACTION", "AGENT_SKILL_REVISION"):
+    for name in ("AGENT_SKILL_EXTRACTION",):
         monkeypatch.delenv(name, raising=False)
     for name, value in env.items():
         monkeypatch.setenv(name, value)
@@ -713,24 +713,6 @@ def test_a_row_reports_extraction_as_config_resolves_it(tmp_path, monkeypatch):
 
     row = _recorded(tmp_path, monkeypatch, AGENT_SKILL_EXTRACTION="off")
     assert row["extraction"] is False
-
-
-def test_a_row_says_which_revision_arm_it_was(tmp_path, monkeypatch):
-    """Two Phase R directories, real and control, were distinguishable only by
-    opening the skill files. A row must carry its own arm."""
-    assert _recorded(tmp_path, monkeypatch, AGENT_SKILL_REVISION="on")["revision"] is True
-    assert _recorded(tmp_path, monkeypatch, AGENT_SKILL_REVISION="off")["revision"] is False
-
-
-def test_revision_is_OFF_unless_asked_for(tmp_path, monkeypatch):
-    """Measured 2026-09-13 on the guards: R marked a skill suspect on 7 runs and
-    6 of them PASSED. The trigger reads "hit a cap" as "skill was wrong", and
-    the loop has no signal that separates the two - the last exit code is 0 in
-    both, the tool-error streak is <= 1 in both, the only thing that knows is
-    the harness's check. With a persistent home that replaces a GOOD skill on
-    the next done session. Off by default; the harness turns it on where it
-    is measured."""
-    assert _recorded(tmp_path, monkeypatch)["revision"] is False
 
 
 def test_the_manifest_records_which_commit_it_measured(monkeypatch):

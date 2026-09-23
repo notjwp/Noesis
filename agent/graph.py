@@ -780,21 +780,9 @@ def finish(state: AgentState, config: RunnableConfig) -> dict:
         # AGENT.md was empty on the one machine this actually runs on.
         memory.distil(state["messages"], skip=CAP_SUMMARY_REQUEST)
 
-    # Phase R: a skill that was open when the run FAILED is suspect, and the next
-    # run that succeeds replaces it. Recorded here rather than judged - `act` is
-    # the only node that may call a model, so this node states a fact and
-    # `skills.extract` consumes it by a rule.
-    opened = skills.matched(_goal(state["messages"]))
-    if (settings.SKILL_REVISION and opened
-            and (state["verdict"] in ("stuck", "budget")
-                 or state.get("failures", 0) >= 3)):
-        memory.mark_suspect(opened, goal=_goal(state["messages"]),
-                            verdict=str(state["verdict"]))
-
     # Phase O-redux: knowledge is retained WITHOUT the agent electing to record
     # it. Deterministic injection went 0/18 to 15/18; the `learn` tool went 0/15.
-    for name in skills.extract(state["messages"], _goal(state["messages"]),
-                               verdict=str(state["verdict"]), opened=opened):
+    for name in skills.extract(state["messages"], _goal(state["messages"])):
         if trace is not None:
             trace.append({"kind": "skill", "name": name})
     return {}
