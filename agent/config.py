@@ -127,7 +127,10 @@ def openai_api_key() -> str:
 # turn 45, so 30 keeps BUDGET_TOKENS the real ceiling. Comparable agents cap a
 # parent at 200-500; 12 was a fixture-era cost control that outlived its reason.
 MAX_TURNS = 30
-BUDGET_TOKENS = 200_000
+# 0 = no ceiling, set 2026-09-23. Runs were ending on `budget` with the fix
+# already landed and the tests green; MAX_TURNS and MAX_SECONDS still bound a
+# run, so removing this leaves two stops, not none. UNMEASURED - see NFR-401.
+BUDGET_TOKENS = int(_env("AGENT_BUDGET_TOKENS", "0"))
 
 # WORKING seconds, accumulated by the nodes that spend time - not wall-clock
 # since the goal arrived, or a thread resumed next week dies on its first turn.

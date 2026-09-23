@@ -5,6 +5,53 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## No token budget: the cap was ending runs that had already finished the work (2026-09-23)
+
+**Not a tuning cycle, and not measured.** A cap removed, on request, with the
+paperwork to say what that costs.
+
+`config.BUDGET_TOKENS` is 0 (no ceiling) and all 66 cases in
+`eval/tasks.jsonl` carry `budget: 0`. The verdict still exists and is still a
+hard stop when a caller passes a ceiling - `new_state(goal, max_turns,
+budget)` is unchanged, and the test that proves a budget terminates a run is
+unchanged. What is gone is the default.
+
+### Why
+
+`budget` was the terminal verdict on 6 of 12 rows in the 09-22 control and 9
+and 10 of 18 on the two 09-19 passes, and several of those runs had landed
+the edit and seen pytest pass before the cap fired - `cachetools[1]` on
+09-19 edited at call 22, ran the tests green at 23, and kept going until the
+budget stopped it at 27. That is the same shape as the `MAX_SECONDS` finding
+of 09-09: a cap sized against runaway runs, ending working ones instead.
+
+The real cases carried 400,000, not the 200,000 in config - the per-case
+`budget` field in tasks.jsonl overrides it, which is why every `budget` row
+reads 401-417k. Both are now 0.
+
+### What still stops a run
+
+`MAX_TURNS = 30` and `MAX_SECONDS = 1500`, both derived and both measured.
+At the ~13.4k tokens per turn these passes recorded, 30 turns is ~400k, so
+the turn cap sits roughly where the token cap did: expect `budget` verdicts
+to become `stuck` rather than to disappear. That is a prediction, not a
+result.
+
+### Against it, and recorded
+
+CLAUDE.md's standing lesson: a budget experiment gave the agent 1M tokens,
+it spent 281-516k and made LESS progress. That was a different change - a
+raise, with compaction behaving differently - but it is the nearest
+measurement and it points the other way. Nothing here refutes it.
+
+NFR-401 amended in writing rather than reinterpreted. **Every number in this
+repository was measured under a budget**; the next scored pass is a new
+baseline, not a comparison with 9/18.
+
+1,197 -> 1,200 tests: no budget means no `budget` verdict; the TUI's
+"running low" warning needs an explicit ceiling; the status line shows bare
+spend when there is none.
+
 ## The replication: 9/18, the token growth is real, and the loop code is not the cause (2026-09-19)
 
 **Not a tuning cycle.** The pre-registered replication of the morning's

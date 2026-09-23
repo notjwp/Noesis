@@ -423,9 +423,10 @@ def reflect(state: AgentState, config: RunnableConfig | None = None) -> dict:
     inspects the signature and passes it when present, and every direct caller in
     the tests passes state alone, so the default keeps both working.
     """
-    # NFR-401's HARD stop. The old check fired at 60% and terminated, which read
-    # as a budget stop while actually being a compaction trigger.
-    if state["spent_tokens"] >= state["budget_tokens"]:
+    # NFR-401's HARD stop, when there is one: 0 means no ceiling (config).
+    # The old check fired at 60% and terminated, which read as a budget stop
+    # while actually being a compaction trigger.
+    if state["budget_tokens"] and state["spent_tokens"] >= state["budget_tokens"]:
         return {"verdict": "budget"}                                    # (a0)
 
     # FR-403, on CONTEXT SIZE rather than cumulative spend. See the derivation in

@@ -1263,6 +1263,23 @@ def test_the_status_line_shows_spend_against_the_budget():
     drive(app, script)
 
 
+def test_the_status_line_shows_bare_spend_when_there_is_no_budget():
+    """With no ceiling there is nothing to show it against, and `150,000/0`
+    reads as a bug."""
+    app = workspace()
+
+    async def script(pilot):
+        app.screen._state = {"turns": 2, "max_turns": 30,
+                             "spent_tokens": 150_000, "budget_tokens": 0}
+        app.screen.paint_status()
+        await pilot.pause()
+
+        shown = rendered(app)
+        assert "150,000" in shown and "150,000/" not in shown
+
+    drive(app, script)
+
+
 def test_a_thread_says_it_is_running_low_ONCE(monkeypatch):
     """spent_tokens only grows and reflect checks it first, so the dead end is
     reachable but never announced. Warn while /chat is still a choice rather
@@ -1270,6 +1287,9 @@ def test_a_thread_says_it_is_running_low_ONCE(monkeypatch):
     app = workspace()
 
     async def script(pilot):
+        # An explicit ceiling: config.BUDGET_TOKENS is 0 (no budget) since
+        # 2026-09-23, and there is nothing to run low on without one.
+        app.screen._state = {"budget_tokens": 200_000}
         for _ in range(3):
             app.screen.on_trace({"kind": "terminal", "verdict": "done",
                                  "turns": 1, "spent_tokens": 170_000})
@@ -1278,6 +1298,23 @@ def test_a_thread_says_it_is_running_low_ONCE(monkeypatch):
         said = " ".join(str(r) for r in app.screen.transcript).lower()
         assert "running low" in said
         assert said.count("running low") == 1, "it warned more than once"
+
+    drive(app, script)
+
+
+def test_a_thread_with_no_budget_never_says_it_is_running_low():
+    """0 means no ceiling. A warning about a limit that does not exist is the
+    kind of noise the warning above was written to avoid."""
+    app = workspace()
+
+    async def script(pilot):
+        app.screen._state = {"budget_tokens": 0}
+        app.screen.on_trace({"kind": "terminal", "verdict": "done",
+                             "turns": 1, "spent_tokens": 5_000_000})
+        await pilot.pause()
+
+        assert "running low" not in " ".join(
+            str(r) for r in app.screen.transcript).lower()
 
     drive(app, script)
 

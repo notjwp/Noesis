@@ -536,6 +536,20 @@ def test_budget_exhaustion_terminates(fresh_app, tmp_workspace, monkeypatch):
     assert final["spent_tokens"] >= final["budget_tokens"]
 
 
+def test_no_budget_means_no_budget_verdict(fresh_app, tmp_workspace, monkeypatch):
+    """config.BUDGET_TOKENS is 0 since 2026-09-23: no token ceiling. A run that
+    would have died on `budget` now ends on its own terms - MAX_TURNS and
+    MAX_SECONDS are the remaining stops, so this is not an unbounded loop."""
+    use_fake(monkeypatch, [
+        tool_turn("run_shell", cid=f"t{i}", command=f"echo {i}") for i in range(4)
+    ] + [text_turn("done")])
+
+    final = run(fresh_app, "loop-8", budget_tokens=0)
+
+    assert final["verdict"] != "budget", final["verdict"]
+    assert final["spent_tokens"] > 0
+
+
 def test_trace_captures_model_and_tool_activity(fresh_app, tmp_workspace, monkeypatch):
     use_fake(monkeypatch, [
         tool_turn("run_shell", command="echo ok"),

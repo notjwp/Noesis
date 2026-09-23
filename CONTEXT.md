@@ -473,6 +473,20 @@ A requirement without a number is not testable. Targets are the point.
   NFR-304   Boundedness      Every task carries enforced caps on turns, tokens
                              and wall-clock time
   NFR-401   Cost             Token budget enforced as a hard stop, not advisory
+                             AMENDED 2026-09-23: there is no budget by default.
+                             config.BUDGET_TOKENS is 0 and every case in
+                             eval/tasks.jsonl carries 0; a ceiling passed
+                             explicitly is still a HARD stop, which is the half
+                             of this requirement that was load-bearing. Runs
+                             were ending on `budget` with the edit landed and
+                             the tests green - 6 of 12 rows in the 09-22
+                             control, 9-10 of 18 on 09-19 - so the cap was
+                             ending working runs, which is what MAX_SECONDS was
+                             re-derived for on 09-09. MAX_TURNS (30) and
+                             MAX_SECONDS (1500) remain, so a run still has two
+                             stops. UNMEASURED: every number in this repository
+                             was measured under a budget, and the next scored
+                             pass is a new baseline, not a comparison.
   NFR-402   Cost             Median eval case completes within 60,000 tokens
   NFR-403   Cost             Compaction reduces context by at least 50% when it
                              fires

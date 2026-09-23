@@ -56,6 +56,14 @@ LOGO_WIDTH = 46
 # /chat is still a choice. 0.8 leaves room for several more exchanges.
 LOW_BUDGET = 0.8
 
+
+def _spend(values: dict) -> str:
+    """Spent tokens, against the budget when there is one (config's 0 = none).
+    A bare 204,972 is a number with nothing to compare it to."""
+    spent = values.get("spent_tokens", 0)
+    budget = values.get("budget_tokens", settings.BUDGET_TOKENS)
+    return f"{spent:,}/{budget:,}" if budget else f"{spent:,}"
+
 # One frame per 80ms while the graph is working, and no timer at all otherwise.
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
@@ -771,8 +779,8 @@ class WorkspaceScreen(Screen):
                 # anyone does with noise is stop reading it - the same reason
                 # worker.review() stays silent when there is nothing to say.
                 budget = self._state.get("budget_tokens",
-                                         settings.BUDGET_TOKENS) or 1
-                if entry["spent_tokens"] >= budget * LOW_BUDGET:
+                                         settings.BUDGET_TOKENS)
+                if budget and entry["spent_tokens"] >= budget * LOW_BUDGET:
                     self._warned_low = True
                     self.note(f"running low: {entry['spent_tokens']:,} of "
                               f"{budget:,} tokens. /chat starts a fresh "
@@ -973,8 +981,7 @@ class WorkspaceScreen(Screen):
                 # Against the budget, not alone: a bare 204,972 is a number
                 # with nothing to compare it to, in a thread two messages from
                 # being finished.
-                f"{values.get('spent_tokens', 0):,}/"
-                f"{values.get('budget_tokens', settings.BUDGET_TOKENS):,}",
+                _spend(values),
                 values.get("verdict") or "running"]
         body = (self._stream.strip()[-160:] if self._stream.strip()
                 else "  ·  ".join(bits))
