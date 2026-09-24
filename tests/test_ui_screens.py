@@ -823,6 +823,43 @@ def test_the_approval_modal_offers_allow_for_the_session():
     assert app.answer == "session"
 
 
+def test_the_approval_modal_can_amend_the_call():
+    """FR-307 in the TUI. Amend turns every argument into a field; Apply answers
+    with the corrected set, which the gate re-classifies. The CLI's `[e]`, with
+    a mouse."""
+    from textual.widgets import Button, Input
+
+    from agent.ui.modals import ApprovalScreen
+
+    class Asked(screens.NoesisApp):
+        def __init__(self):
+            super().__init__(FakeGraph(), thread="t")
+            self.answer = "UNSET"
+
+    app = Asked()
+    payload = {"call": {"id": "t1", "name": "run_shell",
+                        "input": {"command": "rm -rf build", "timeout": 120}},
+               "reason": "run_shell is destructive (recursive delete)"}
+
+    async def script(pilot):
+        app.push_screen(ApprovalScreen(payload),
+                        callback=lambda r: setattr(app, "answer", r))
+        await pilot.pause()
+        # Hidden until asked for: the modal stays a one-keystroke answer for
+        # the far commoner case.
+        assert not app.screen.query_one("#amend-command", Input).display
+        app.screen.query_one("#amend", Button).press()
+        await pilot.pause()
+        app.screen.query_one("#amend-command", Input).value = "rm -rf build/tmp"
+        app.screen.query_one("#amend", Button).press()   # now Apply
+        await pilot.pause()
+
+    drive(app, script)
+    assert app.answer == {"decision": "amend",
+                          "input": {"command": "rm -rf build/tmp",
+                                    "timeout": "120"}}
+
+
 def test_a_remembered_rule_does_not_open_the_modal_again():
     """cli.remembered() is the same memory the CLI uses, so an allow given in
     the TUI holds in the CLI for the rest of the process and vice versa."""

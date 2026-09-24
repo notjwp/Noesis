@@ -721,6 +721,11 @@ class WorkspaceScreen(Screen):
                     # Anything other than an explicit accept revises, so a
                     # dismissed modal cannot adopt a plan nobody agreed to.
                     resume = "accept" if answer == "accept" else "revise"
+                elif isinstance(answer, dict):
+                    # FR-307. Straight through: the gate re-classifies it, and
+                    # an amendment is never remembered - the rule it was
+                    # remembered under described the original arguments.
+                    resume = answer
                 else:
                     # Anything that is not an explicit allow is a refusal.
                     if answer == "session":

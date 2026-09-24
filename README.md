@@ -165,7 +165,9 @@ saved to disk and the model is told how to read the rest.
 **What it will not do without asking:** delete recursively, force-push, `sudo`, write to `/etc` or
 your shell profile, read `.ssh` or `.env`, pipe the internet into a shell, or run a program through
 a read-only tool's flag (`sort --compress-program`, `rg --pre`). Unattended, those are refused.
-When it asks, `s` allows that *rule* for the rest of the session — `rm -rf build` once, and it stops
+When it asks, `e` lets you *correct* the command instead of answering yes or no — the corrected one
+is classified again, so an edit fixes a call rather than waving it through. And `s` allows that
+*rule* for the rest of the session — `rm -rf build` once, and it stops
 asking about recursive deletes, but still asks about a force-push.
 
 **What it will not do even if you say yes:** delete `/` or your home directory, write to a block
@@ -216,7 +218,7 @@ place Docker is needed.
 ```bash
 docker build -f Containerfile -t personal-agent .
 
-# 1,186 offline tests - no API key, no network
+# 1,193 offline tests - no API key, no network
 docker run --rm --network none --read-only --tmpfs /tmp:exec \
   -v "$PWD:/app:ro" -v "$PWD/eval/workspace:/workspace" \
   -v "$PWD/.agent/homes/_t:/state" personal-agent python -m pytest -q

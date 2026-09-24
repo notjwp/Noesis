@@ -5,6 +5,40 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## FR-307: correcting a call at the approval point (2026-09-24)
+
+**Not a tuning cycle.** An interface, and a branch of the gate that had been
+written and never tested.
+
+The gate pauses on `rm -rf build` and the only answers were yes and no. Denying
+costs a turn and hopes the model proposes something safer next time. `[e]dit` in
+the CLI and Amend in the TUI hand back the corrected arguments instead.
+
+`gate` already accepted `{"decision": "amend", "input": {...}}` and
+re-classified it - written on 2026-08-something with a comment claiming
+"RE-CLASSIFIED, never waved through", and **no test anywhere asserted it**.
+Both halves are covered now, end to end: an amendment that edits a path to
+escape the workspace is still denied, and one that turns `rm -rf build` into
+`ls build` runs `ls build` - asserted on what actually executed, not on the
+verdict.
+
+One prompt per argument, in order, Enter keeping the current value - the whole
+set is editable for the same reason FR-306 shows the whole set unabbreviated. A
+changed value arrives as a string and the tool coerces it at its own boundary,
+which is where every declared type is enforced anyway. EOF mid-edit is `deny`:
+silence is not consent one step later either.
+
+**Not remembered.** `[s]` keys on the rule the gate named, and that rule
+described the arguments the amendment replaces.
+
+In the TUI the fields are hidden until Amend is pressed, and that same button
+becomes Apply - a second button would sit there doing nothing until armed.
+
+No schema cost, and no eval: scored runs are autonomous, where `confirm`
+degrades to `deny` and no human is asked. 1,186 -> 1,193 tests. Both new
+branches mutation-checked: drop the `decision` key from the CLI answer and two
+tests go red; remove the gate's re-classification and the escape test goes red.
+
 ## The Phase R replacement, measured: revision 3/3, and the first attempt scored 0/1 (2026-09-24)
 
 **KEPT.** The bar was `revision` 3/3 against the 1/3 control, guards `skills`

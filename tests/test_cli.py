@@ -82,6 +82,63 @@ def test_plain_allow_is_not_remembered(monkeypatch):
     assert cli.ask_human(PAUSE) == "deny" and remaining == []
 
 
+def test_edit_amends_the_call_rather_than_answering_yes_or_no(monkeypatch):
+    """FR-307. The gate pauses on `rm -rf build`; denying it and waiting for the
+    model to propose something safer costs a turn and may never happen. `[e]`
+    hands back corrected arguments, which the gate RE-CLASSIFIES."""
+    cli.forget_approvals()
+    # One prompt per argument, in order: the whole set is shown and the whole
+    # set is editable, for the same reason FR-306 shows it unabbreviated.
+    remaining = answers(monkeypatch, "e", "rm -rf build/tmp", "")
+
+    verdict = cli.ask_human(PAUSE)
+
+    assert verdict == {"decision": "amend",
+                       "input": {"command": "rm -rf build/tmp", "timeout": 120}}
+    assert remaining == [], "every answer should have been consumed"
+
+
+def test_an_amendment_that_changes_nothing_is_still_the_answer(monkeypatch):
+    """Enter keeps the current value. Editing and changing nothing is consent -
+    it took deliberate keystrokes - and the gate re-classifies it to the same
+    verdict it already reached."""
+    remaining = answers(monkeypatch, "e", "", "")
+
+    assert cli.ask_human(PAUSE) == {"decision": "amend",
+                                    "input": {"command": "rm -rf build",
+                                              "timeout": 120}}
+    assert remaining == []
+
+
+def test_an_amendment_is_not_remembered(monkeypatch):
+    """`[s]` remembers the RULE the gate named, and that rule described the
+    ORIGINAL arguments. An amended call is a different call."""
+    cli.forget_approvals()
+    answers(monkeypatch, "e", "rm -rf build/tmp", "")
+    cli.ask_human(PAUSE)
+
+    remaining = answers(monkeypatch, "d")
+    assert cli.ask_human(PAUSE) == "deny", "the amendment was remembered"
+    assert remaining == []
+
+
+def test_no_terminal_during_an_amendment_means_deny(monkeypatch):
+    """Silence is not consent in the middle of an edit any more than at the
+    prompt - the EOF branch above, one step later."""
+    import builtins
+
+    answered = iter(["e"])
+
+    def once(_=""):
+        try:
+            return next(answered)
+        except StopIteration:
+            raise EOFError from None
+
+    monkeypatch.setattr(builtins, "input", once)
+    assert cli.ask_human(PAUSE) == "deny"
+
+
 def test_unrecognised_input_reprompts_rather_than_guessing(monkeypatch):
     """NFR-801: one keystroke resolves it - but only a RECOGNISED one. A typo
     must never be read as consent."""

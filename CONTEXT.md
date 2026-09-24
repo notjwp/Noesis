@@ -357,6 +357,12 @@ Only [M] items are in scope for the first build. See section 9.
                prompt, unabbreviated and untruncated.
   FR-307  [C]  Allow the user to amend a tool call's arguments at the approval
                point, not merely accept or reject.
+               BUILT 2026-09-24. `[e]dit` in the CLI, Amend in the TUI. The
+               amendment arrives as DATA through the interrupt and is
+               RE-CLASSIFIED, so it fixes a call and is never a way past the
+               gate; the gate's half of this had been written and was untested
+               until now. Not remembered by `[s]`: that memory keys on the rule
+               the gate named, which described the original arguments.
 
 6.4 CONTEXT AND MEMORY (FR-4xx)
 

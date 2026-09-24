@@ -185,11 +185,34 @@ def forget_approvals() -> None:
     _APPROVED.clear()
 
 
-def ask_human(payload: dict) -> str:
+def _amend(current: dict) -> dict | None:
+    """Read a replacement for each argument; Enter keeps the current value.
+
+    None when the terminal goes away mid-edit - silence is not consent one step
+    later either. A changed value arrives as a string and the tool coerces it at
+    its own boundary, which is where every declared type is enforced anyway.
+    """
+    print("    amend - Enter keeps the current value")
+    edited = {}
+    for key, value in current.items():
+        try:
+            typed = input(f"      {key} [{value}] > ")
+        except EOFError:
+            print("deny (no terminal)")
+            return None
+        edited[key] = typed if typed.strip() else value
+    return edited
+
+
+def ask_human(payload: dict) -> str | dict:
     """Render a paused call and read one keystroke (FR-306, NFR-801).
 
     The argument set is shown in full, never abbreviated. A prompt that elides
     the dangerous half of a command manufactures consent instead of obtaining it.
+
+    FR-307: `[e]dit` answers with the CORRECTED arguments instead of yes or no.
+    The gate re-classifies them, so this is a way to fix a call, never a way
+    past the gate.
     """
     if "plan" in payload:
         return ask_plan(payload)
@@ -209,7 +232,8 @@ def ask_human(payload: dict) -> str:
 
     while True:
         try:
-            answer = input("    [a]llow  [s]ession  [d]eny  [q]uit > ").strip().lower()
+            answer = input(
+                "    [a]llow  [s]ession  [e]dit  [d]eny  [q]uit > ").strip().lower()
         except EOFError:
             # No terminal attached. Silence is not consent.
             print("deny (no terminal)")
@@ -219,12 +243,18 @@ def ask_human(payload: dict) -> str:
         if answer in ("s", "session"):
             remember(payload)
             return "allow"
+        if answer in ("e", "edit"):
+            # Never remembered: `remember` keys on the rule the gate named, and
+            # that rule described the arguments this answer is replacing.
+            amended = _amend(call["input"])
+            return "deny" if amended is None else {"decision": "amend",
+                                                   "input": amended}
         if answer in ("d", "deny"):
             return "deny"
         if answer in ("q", "quit"):
             return QUIT
         # Anything unrecognised re-asks. A mistyped key must never read as yes.
-        print("    unrecognised - answer a, s, d or q")
+        print("    unrecognised - answer a, s, e, d or q")
 
 
 # -------------------------------------------------------------------- session

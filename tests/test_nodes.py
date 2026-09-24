@@ -815,6 +815,37 @@ def test_two_approvals_in_one_turn_are_answered_separately(
     assert [c["command"] for c in calls] == ["rm -rf build"]
 
 
+def test_an_amendment_is_re_classified_and_can_still_be_denied(
+        fresh_app, tmp_workspace, monkeypatch):
+    """FR-307's danger, and the gate's own claim. Editing the arguments at the
+    approval point must not be the way PAST the gate: the amended call is
+    classified again, and `rm -rf /` is refused however it arrived."""
+    calls = spy_on_run_shell(monkeypatch)
+    use_fake(monkeypatch, [tool_turn("run_shell", **DESTRUCTIVE), text_turn("ok")])
+    cfg_ = interactive("amend-denied")
+
+    fresh_app.invoke(state(), cfg_)
+    fresh_app.invoke(Command(resume={"decision": "amend",
+                                     "input": {"command": "rm -rf /"}}), cfg_)
+
+    assert calls == [], "an amendment reached execute without being re-classified"
+
+
+def test_an_amendment_that_removes_the_danger_runs(
+        fresh_app, tmp_workspace, monkeypatch):
+    """The point of FR-307: the paused call is corrected and the CORRECTED one
+    runs, without a turn spent asking the model to propose it."""
+    calls = spy_on_run_shell(monkeypatch)
+    use_fake(monkeypatch, [tool_turn("run_shell", **DESTRUCTIVE), text_turn("ok")])
+    cfg_ = interactive("amend-allowed")
+
+    fresh_app.invoke(state(), cfg_)
+    fresh_app.invoke(Command(resume={"decision": "amend",
+                                     "input": {"command": "ls build"}}), cfg_)
+
+    assert [c["command"] for c in calls] == ["ls build"]
+
+
 @pytest.mark.parametrize("answer", ["yes", "y", "", "ALLOW", "sure"])
 def test_a_garbled_answer_fails_closed(fresh_app, tmp_workspace, monkeypatch, answer):
     """Only the exact string "allow" is consent. Anything else is a rejection,

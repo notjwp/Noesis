@@ -17,7 +17,7 @@ from textual.widgets import Button, Input, Label, Static
 from agent import cli
 
 
-class ApprovalScreen(ModalScreen[str]):
+class ApprovalScreen(ModalScreen[str | dict]):
     """The paused call, and one answer (FR-306, NFR-801).
 
     Every argument is shown in full, never abbreviated - the CLI's rule, and the
@@ -27,6 +27,10 @@ class ApprovalScreen(ModalScreen[str]):
     A modal has dismissal paths a keystroke loop cannot have, and each of them
     resolves to DENY: escape, and any dismissal that is not the allow button.
     Silence is not consent, exactly as the CLI's EOFError branch already says.
+
+    FR-307: Amend turns every argument into a field and answers with the
+    corrected set, which the gate re-classifies. A way to fix a call, never a
+    way past the gate.
     """
 
     BINDINGS = [("escape", "refuse", "deny")]
@@ -34,6 +38,7 @@ class ApprovalScreen(ModalScreen[str]):
     def __init__(self, payload: dict) -> None:
         super().__init__()
         self._payload = payload
+        self._editing = False
 
     def compose(self) -> ComposeResult:
         call = self._payload["call"]
@@ -41,10 +46,14 @@ class ApprovalScreen(ModalScreen[str]):
             yield Label(f"APPROVAL NEEDED   {call['name']}", id="approval-title")
             for key, value in call["input"].items():
                 yield Static(Text(f"  {key}: {value}"), classes="arg")
+                field = Input(value=str(value), id=f"amend-{key}", classes="amend")
+                field.display = False
+                yield field
             yield Label(f"Reason: {self._payload.get('reason', '')}", classes="why")
             with Horizontal(id="approval-buttons"):
                 yield Button("Allow", id="allow", variant="error")
                 yield Button("Allow for session", id="session", variant="error")
+                yield Button("Amend", id="amend")
                 yield Button("Deny", id="deny", variant="primary")
                 yield Button("Quit", id="quit")
 
@@ -53,10 +62,28 @@ class ApprovalScreen(ModalScreen[str]):
         # must be the one that takes a deliberate keystroke.
         self.query_one("#deny", Button).focus()
 
+    @on(Button.Pressed, "#amend")
+    def _amend(self) -> None:
+        """First press reveals the fields, second answers with them. One button
+        because a second one would sit there doing nothing until it was armed."""
+        if not self._editing:
+            self._editing = True
+            for field in self.query(".amend"):
+                field.display = True
+            self.query_one("#amend", Button).label = "Apply"
+            self.query_one(".amend", Input).focus()
+            return
+        call = self._payload["call"]
+        self.dismiss({"decision": "amend",
+                      "input": {key: self.query_one(f"#amend-{key}", Input).value
+                                for key in call["input"]}})
+
     @on(Button.Pressed)
     def _pressed(self, event: Button.Pressed) -> None:
-        self.dismiss({"allow": "allow", "session": "session", "deny": "deny",
-                      "quit": cli.QUIT}[event.button.id])
+        answer = {"allow": "allow", "session": "session", "deny": "deny",
+                  "quit": cli.QUIT}.get(event.button.id)
+        if answer is not None:
+            self.dismiss(answer)
 
     def action_refuse(self) -> None:
         self.dismiss("deny")
