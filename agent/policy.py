@@ -59,6 +59,18 @@ _EXEC_FLAG = (
 # `grep shutdown log` are words and `ls; halt` is a command.
 _COMMAND_START = r"(?:^|[;&|(]\s*|\bsudo\s+)"
 
+# FR-204. Installing a package is ordinary work; WHERE it comes from is the
+# decision. A bare path is not a source - it matches every flag that takes
+# one, and `-r ./requirements.txt` denied autonomously fails `missing-dep`.
+_PACKAGE_SOURCE = (
+    r"\bPIP_CONFIG_FILE\s*="
+    r"|\b(?:pip[\d.]*|uv\s+pip|npm|pnpm|yarn)\b[^|]*\b(?:install|add)\b[^|]*"
+    r"(?:--(?:index-url|extra-index-url|find-links|trusted-host|registry)"
+    r"|\s-i\s"
+    r"|\s(?:https?|git\+[a-z]+|file|ssh)://"
+    r"|\s\S+\.(?:whl|tar\.gz|tgz)\b)"
+)
+
 # The same list as a standalone pattern, for PATH arguments. `cat ~/.ssh/id_rsa`
 # and read_file(path="~/.ssh/id_rsa") are the same act and must get the same
 # answer, which they did not while only run_shell was inspected.
@@ -96,6 +108,7 @@ DANGER = [(name, re.compile(pattern, re.IGNORECASE)) for name, pattern in (
     ("a program run by a read-only tool's flag", _EXEC_FLAG),
     # a redirect INTO anything sensitive, which no verb above would catch
     ("a redirect into a dotfile", rf">>?\s*{_HOME}/\."),
+    ("a package from an unvetted source", _PACKAGE_SOURCE),
 )]
 
 # Above `destructive`: refused with a person present, and no approval can allow

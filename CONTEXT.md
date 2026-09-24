@@ -320,6 +320,13 @@ Only [M] items are in scope for the first build. See section 9.
   FR-203  [M]  Execute Python, returning stdout, tracebacks, and the value of
                the final expression.
   FR-204  [S]  Install packages into the sandbox environment on request.
+               SOURCE-GATED 2026-09-24, which is not the [S] itself: §8.2's
+               resolution stands and there is still no run-time install in a
+               scored container. What changed is the path that exists in
+               INTERACTIVE use, where the gate is the whole boundary. A plain
+               `pip install x` and `-r requirements.txt` stay auto; a
+               redirected index, a URL, git+, an archive or a replaced
+               PIP_CONFIG_FILE ask.
   FR-205  [S]  Perform git status, diff, branch, add, commit, push.
   FR-206  [S]  Provide repository inspection (tree, grep, symbol search) that
                returns paths and line numbers, not file contents.

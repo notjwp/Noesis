@@ -218,7 +218,7 @@ place Docker is needed.
 ```bash
 docker build -f Containerfile -t personal-agent .
 
-# 1,193 offline tests - no API key, no network
+# 1,222 offline tests - no API key, no network
 docker run --rm --network none --read-only --tmpfs /tmp:exec \
   -v "$PWD:/app:ro" -v "$PWD/eval/workspace:/workspace" \
   -v "$PWD/.agent/homes/_t:/state" personal-agent python -m pytest -q

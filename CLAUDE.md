@@ -10,7 +10,7 @@ table). Read those when you need history; do not copy history back into here.
 ## State
 
 `act -> gate -> execute -> reflect` over a two-provider adapter, a policy gate that is the boundary
-(a kernel-enforced sandbox for scored runs only), CLI and Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,193 offline tests**, green with no API key, no network, a
+(a kernel-enforced sandbox for scored runs only), CLI and Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,222 offline tests**, green with no API key, no network, a
 read-only root filesystem, and without the `mcp` package installed.
 
 | | |
@@ -61,6 +61,12 @@ Ordered by how often they have caught something.
   four of six real cases, and they are the ones that were tuned against.
 - **A pass rate is not evidence for a mechanism that did not fire.** Check the instrumentation says
   the thing ran before attributing anything to it.
+- **A gate rule that never fired in a passing run is not proven safe.** FR-204's first
+  version denied `pip install -r ./requirements.txt`, because a clause for a bare local
+  path matches every FLAG that takes one. `missing-dep` scored 3/3 and the rule fired 0
+  times in 210 calls - it passed because the model wrote `requirements.txt` with no path
+  prefix three times out of three. Probe the NEAR-MISS forms by hand; a clean split only
+  says the forms the model happened to write were safe.
 
 **The loop and the model**
 
@@ -367,7 +373,7 @@ python eval/harness.py --case fix-import --runs 3                  # one case, r
 scripts/reset.sh <case-id>        # restore /workspace to a fixture's state (idempotent)
 powershell -File scripts/install-tasks.ps1        # run --channel and --worker at logon
 powershell -File scripts/install-tasks.ps1 -Remove
-pytest                            # 1,193 tests, no API key, no network
+pytest                            # 1,222 tests, no API key, no network
 ```
 
 Tests run in the container, which is the measured environment: read-only root, `--network none`,

