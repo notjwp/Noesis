@@ -5,6 +5,74 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## The Phase R replacement, measured: revision 3/3, and the first attempt scored 0/1 (2026-09-24)
+
+**KEPT.** The bar was `revision` 3/3 against the 1/3 control, guards `skills`
+18/18 and `authoring` 11/11, pre-registered before either ran.
+
+```
+revision   3/3   done x3       (control arm 1/3)
+skills    18/18  every case 3/3, 0 tamper
+authoring 11/12  against 10/12 on 09-13, +1 (author-testname 2/3 -> 3/3)
+```
+
+Verified in the FILES, which is the standard this project holds R to: in all
+three `revision` runs session 4 opened **`runbook`**, the library held BOTH
+skills, and `conventions` still carried `-slate`. Nothing was overwritten -
+the whole difference from the mechanism this replaces.
+
+### The first attempt scored 0/1 and the diagnosis was wrong
+
+Shipped: `best_match` breaks a tie by recency. Row 0 failed `stuck`, session 4
+opened **nothing**, and the tie branch was never reached. Reproduced against
+the library that run actually wrote:
+
+```
+library: ['conventions', 'runbook']
+best_match("Cut release 2.3.") -> None
+ceiling 1
+  conventions  overlap ['release']  rare []
+  runbook      overlap ['release']  rare []
+```
+
+At two skills the furniture ceiling is `len(entries) // 2` = 1, and `release`
+is in both descriptions, so it is dropped and `scores` comes back EMPTY. The
+old tie test's own docstring says this - "with two, the word is dropped as
+furniture and the function returns None before the tie branch is ever
+reached" - and it was read, a six-skill test was written around it, and the
+real two-skill library was never tried. The run was stopped at row 0 rather
+than spend two more rows proving it three times.
+
+The deeper point: the goal is "Cut release 2.3." and the two descriptions
+differ only in `conventions`/CONVENTIONS.md against `runbook`/RUNBOOK.md,
+neither of which is in the goal. **No word-overlap rule can separate them.**
+Recency is the only available signal, and it has to apply where the ranking
+has no opinion, not only where it ties.
+
+So: when no skill has a rare overlap, fall back to plain overlap and let
+recency decide - on words of four letters or more, because `the`, `and` and
+`work` appear in every description `_when()` writes and a three-letter floor
+would match any goal carrying one. Both halves mutation-checked: remove the
+fallback and the fixture test is red; loosen the floor to three and the
+stopword test is red.
+
+### Two confounds, recorded rather than smoothed over
+
+**The `authoring` bar was arithmetic nonsense.** 11/11 was copied from this
+repository's own State table; the split is 4 cases x 3 = **12 rows**, and the
+recorded guard is 10/12 from 09-13. 11/12 is +1 against the number it should
+always have been measured against. The State table is corrected.
+
+**Budgets were removed one commit earlier**, and it shows: `stuck` is 8 of 12
+verdicts in `authoring` and 4 of 18 in `skills`, where these splits used to
+end `done`. `author-errors[1]`, the single loss, is one of them - the right
+skill was written and injected in both later sessions, and session 3 ran to
+the 12-turn cap with the check unmet. So the retrieval change did not break
+the guards, and the +1 cannot be attributed to it. Two changes, one delta,
+which is the confound the one-change rule exists to prevent.
+
+1,184 -> 1,186 tests.
+
 ## Phase R deleted: the defect was in retrieval, not in correction (2026-09-23)
 
 **A cycle, pre-registered and NOT yet measured** - the code and the paperwork

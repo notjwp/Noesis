@@ -616,6 +616,50 @@ def test_a_tie_goes_to_the_most_recently_written(tmp_path, monkeypatch):
     assert skills.best_match('polishing a widget')['name'] == 'beta-thing'
 
 
+def test_two_near_identical_skills_go_to_the_newest(tmp_path, monkeypatch):
+    """The revision fixture, reproduced. Two skills written by `extract`, whose
+    descriptions `_when` builds from the same template: they differ only in
+    `conventions`/CONVENTIONS.md against `runbook`/RUNBOOK.md, and the goal says
+    neither. Measured 2026-09-23: with two skills the furniture ceiling is 1 and
+    `release` appears in both, so NOTHING scored and nothing was injected - the
+    1/3 the control arm scored, and the tie branch was never even reached.
+    """
+    from agent import skills
+
+    root = _library(
+        tmp_path, monkeypatch,
+        ('conventions', 'Use when release procedure applies to the work in hand'
+                        ' - project conventions, formats and rules recorded in'
+                        ' CONVENTIONS.md. Check it BEFORE creating or changing files.'),
+        ('runbook', 'Use when release checklist applies to the work in hand'
+                    ' - project conventions, formats and rules recorded in'
+                    ' RUNBOOK.md. Check it BEFORE creating or changing files.'))
+    _written_at(root, 'conventions', 1_000_000)
+    _written_at(root, 'runbook', 2_000_000)
+
+    assert skills.best_match('Cut release 2.3.')['name'] == 'runbook'
+
+
+def test_the_last_resort_match_ignores_short_words(tmp_path, monkeypatch):
+    """`the`, `and` and `work` are in every description `_when` writes, and they
+    are three or four letters. Without a floor the fallback matches any goal
+    carrying one of them, and injecting the WRONG skill is worse than injecting
+    none - the agent then follows a convention that does not apply."""
+    from agent import skills
+
+    root = _library(
+        tmp_path, monkeypatch,
+        ('conventions', 'Use when release procedure applies to the work in hand'
+                        ' - project conventions recorded in CONVENTIONS.md.'),
+        ('runbook', 'Use when release checklist applies to the work in hand'
+                    ' - project conventions recorded in RUNBOOK.md.'))
+    _written_at(root, 'conventions', 1_000_000)
+    _written_at(root, 'runbook', 2_000_000)
+
+    assert skills.best_match('Tell me about the thing') is None
+    assert skills.best_match('What is the weather like today?') is None
+
+
 def test_two_skills_written_at_the_same_moment_are_still_no_match(
         tmp_path, monkeypatch):
     """Recency breaks a tie; it does not abolish one. Without this the amendment

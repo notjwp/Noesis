@@ -222,6 +222,17 @@ def best_match(goal: str) -> dict | None:
         if rare:
             scores[name] = len(rare)
     if not scores:
+        # Every shared word was furniture - which at TWO skills means any word
+        # they share at all, since the ceiling is len//2. Measured: `conventions`
+        # and `runbook` both say "release", so "Cut release 2.3." scored nothing
+        # and NOTHING was injected. The ranking has no opinion here, so fall back
+        # to plain overlap and let recency decide. Four characters, not three:
+        # every description _when() writes carries "the", "and" and "work".
+        for name, bag in described.items():
+            plain = [w for w in asked & bag if len(w) > 3]
+            if plain:
+                scores[name] = len(plain)
+    if not scores:
         return None
     ranked = sorted(scores.items(), key=lambda kv: -kv[1])
     top = [name for name, score in ranked if score == ranked[0][1]]
