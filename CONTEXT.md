@@ -582,6 +582,37 @@ exists.
     Resolution: FR-402 spill-and-path. Costs one extra tool call, buys a
     bounded context.
 
+  FR-107 as written vs FR-104's four verdicts   ADDED 2026-09-25
+    "Re-plan after three consecutive tool failures rather than continuing blind"
+    is NOT implemented as a re-plan and deliberately so: FR-104 names exactly
+    four terminal outcomes and `replan` is not one of them. graph.py ends the
+    run `stuck` at three consecutive failures instead, and `failures` keeps the
+    cause distinguishable.
+    Evidence, from all 1,492 recorded traces: that exit fired on 50 of 283 stuck
+    runs, so the mechanism works - it is the WORDING that is unmet. The re-plan
+    the requirement asks for fired once in 712 rows when it existed.
+    Resolution: FR-107 is satisfied in intent (not continuing blind) and unmet as
+    written. Recorded here rather than quietly reinterpreted.
+
+  NFR-302 on Windows                           ADDED 2026-09-25
+    Crash recovery cannot work natively on this machine, and the audit found it
+    by actually killing a worker rather than by reading the code.
+    `recover()` requeues a task whose worker died, and asks `_alive()`. On Linux
+    `os.kill(pid, 0)` raises ProcessLookupError for a dead pid and /proc gives a
+    start time, so death is provable. On Windows the same call raises OSError
+    WinError 87, `_alive()` catches OSError and returns True by design - failing
+    safe, because assuming death hands one task to two workers - and
+    `_pid_started()` returns None. So a dead worker looks alive forever and the
+    row stays `running` with nothing to retry it.
+    Measured 2026-09-25: no side effect was duplicated (log.txt held exactly one
+    line), so the checkpointing half of NFR-302 is sound; the RECOVERY half does
+    not run here.
+    Resolution: recorded UNMET rather than amended. Scored runs are containerised
+    (section 11), so the measured environment is unaffected and no number is in
+    question. A fix belongs in `_alive()` and needs a Windows liveness check that
+    keeps the fail-safe property; `--tasks` showing `running` forever is the
+    symptom to watch for until then.
+
   NFR-402 vs the live toolset              ADDED 2026-09-25
     MAX_SCHEMA_CHARS was documented as DERIVED - "the largest cap at which
     NFR-402's median still holds". That derivation no longer holds, and the
@@ -892,25 +923,54 @@ overruns its estimate by more than double, stop and reduce scope.
 10. DEFINITION OF DONE (V1)
 --------------------------------------------------------------------------------
 
-  [ ] 5 dev cases + 10 held-out cases in eval/tasks.jsonl
-  [ ] Dev set >= 4/5 across 3 seeds; held-out set scored at least once and the
+  AUDITED 2026-09-25. Every box below was unticked except NFR-601, which was
+  bookkeeping rather than a claim: seven are met and say what proves it, two are
+  NOT and say why. CLAUDE.md read 9/9 until this pass and now reads 7/9.
+
+  [x] 5 dev cases + 10 held-out cases in eval/tasks.jsonl
+      eval/tasks.jsonl: split `dev` 5, split `heldout` 10.
+  [x] Dev set >= 4/5 across 3 seeds; held-out set scored at least once and the
       number recorded, whatever it is
-  [ ] Zero writes outside the two declared roots across the full suite
+      dev 15/15 across 3 seeds (2026-09-05, at MAX_TURNS=30); held out 30/30,
+      `done` x30, zero tamper, recorded in CLAUDE.md's table.
+  [x] Zero writes outside the two declared roots across the full suite
       (NFR-201, as amended)
+      776 scored rows since 2026-09-01 record ZERO. The only two in all 1,492
+      recorded traces are one run on 2026-08-20, before the amendment and before
+      write_violation_paths was recorded at all, so they name no path.
   [ ] Median case completes within the turn and token caps (NFR-402)
-  [ ] Every deterministic node has unit tests that run without an API key
+      NOT MET, measured: median 68,750 tokens over the 66 rows since 2026-09-20,
+      against a 60,000 ceiling. The all-time median across 1,385 rows is 41,020,
+      so this is a REGRESSION as the toolset grew, not a target never approached.
+      Schema is 43% of a median run. See 8.2, NFR-402 vs the live toolset.
+  [x] Every deterministic node has unit tests that run without an API key
+      1,240 tests green with no API key, no network, a read-only root filesystem
+      and without the `mcp` package installed.
   [ ] A SIGKILL mid-task, followed by resume, completes without duplicated
       side effects (NFR-302)
+      NOT MET ON WINDOWS, tested live 2026-09-25 and this is where it was found.
+      Killed a worker mid-task with TerminateProcess: the row stayed `running`,
+      no side effect was duplicated - and recover() never requeued it, so the
+      task stranded and the resume half never happened. `os.kill(dead, 0)` raises
+      OSError WinError 87 rather than ProcessLookupError, and _alive() catches
+      OSError and returns True, which is the documented fail-safe. _pid_started()
+      reads /proc and returns None here, so the start-time compare cannot rescue
+      it either. The SAME code proves death correctly in the container, where
+      scored runs happen, so the eval path holds and interactive use on this
+      machine does not. See 8.2, NFR-302 on Windows.
   [x] Adding a new tool touches exactly one file (NFR-601)
       TRUE SINCE 2026-08-23, and it was NOT before: TOOLS carried the function
       and the schema while RISK was a literal in policy.py, so every built-in
       since v1 touched two files. A tool now declares `risk` beside its schema
       and policy.risk_of() reads it, falling back to tools.TOOLS so a tool added
       after import is classifiable without a sync() call.
-  [ ] eval/runs/ contains at least three dated runs, each with per-case trace
+  [x] eval/runs/ contains at least three dated runs, each with per-case trace
       files, showing the improvement trajectory
-  [ ] eval/CHANGELOG.md records every tuning cycle: hypothesis, change,
+      184 dated run directories, 1,492 per-case trace files.
+  [x] eval/CHANGELOG.md records every tuning cycle: hypothesis, change,
       before, after, kept or reverted
+      Including the ones that were REVERTED, which is the half that makes the
+      record worth keeping - FR-205 is the most recent.
 
 
 --------------------------------------------------------------------------------

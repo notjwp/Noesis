@@ -5,6 +5,67 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## Requirement audit (2026-09-25)
+
+**No code changed.** An evidence pass over all **1,492 recorded traces** and the
+1,240 tests, because "satisfied" had been read as "implemented" in several
+places, and §10's checkboxes had one tick in nine while CLAUDE.md claimed 9/9.
+
+**Counts**: 52 functional requirements (35 `[M]`, 14 `[S]`, 2 `[C]`, 1 `[W]`) and
+29 non-functional, which carry no MoSCoW tier.
+
+**What the sweep found firing**, across 19,672 tool calls and 190,746 trace
+events in 1,402 scored runs:
+
+| | |
+|---|---|
+| gate verdicts | 19,416 `auto`, 256 `deny`, **zero `confirm`** |
+| tools | read_file 7,259, run_shell 7,071, search_files 1,859, write_file 1,089, edit_file 1,046, run_python 319, load_skill 243, remember 219, fetch 116, read_terminal 103, start_terminal 37, web_search 29, ask_user 29, learn 4 |
+| mechanisms | spills 407, compactions 168, skills extracted 620, authored 4, runs that planned 19 |
+| write violations | 2, both on 2026-08-20; **zero in 776 rows since 2026-09-01** |
+
+`confirm` has NEVER been recorded in a scored run, and that is correct rather
+than broken: scored runs are autonomous, where `confirm` degrades to `deny`. It
+does mean the destructive tier is exercised only by tests and by interactive use,
+which is worth knowing before trusting it.
+
+**Two requirements moved from "code exists" to measured:**
+
+- **FR-106** - detect three consecutive identical tool invocations and terminate
+  as stuck. Replayed `_last_three_signatures_identical` over every recorded
+  message history: **5 runs of 1,403 end that way, and all 5 are `stuck`**. Rare
+  at 0.36%, but it FIRES - unlike `_noop_nudge` (0 of 30) and `_drift_notice`
+  (1 of 15), which were reverted for exactly that.
+- **FR-107** - the re-plan does not exist and was never meant to; the run ends
+  `stuck` at three failures instead, which fired on **50 of 283** stuck runs. The
+  requirement is met in intent and unmet as written, now recorded in §8.2 rather
+  than reinterpreted.
+
+**Nine `[S]` requirements had code and no case.** After this pass: FR-106 and
+FR-804 are measured (the harness delta has been read all week); FR-206, FR-407
+and FR-505 are unit-tested with no eval case, and the evidence that exists argues
+AGAINST two of them - `search_files` was called 1,859 times against `run_shell`
+doing its job, and keyword retrieval scored 0/40 alone on the recall corpus.
+FR-406's own measurement is void: the `profile-*` fixtures provoked `remember`
+in both arms. FR-605 and FR-607 are unit-tested and have never run live.
+
+**§10 is now 7 of 9**, each tick naming what proves it. The two that are not:
+
+- **NFR-402**, median 68,750 tokens since 2026-09-20 against 60,000. The all-time
+  median is 41,020, so this is a regression as the toolset grew.
+- **NFR-302 on Windows**, and finding this is what the pass was worth. I killed a
+  worker mid-task with TerminateProcess. No side effect duplicated - `log.txt`
+  held exactly one line, so checkpointing is sound - but `recover()` never
+  requeued it. `os.kill(dead, 0)` raises `OSError WinError 87` here, not
+  `ProcessLookupError`; `_alive()` catches OSError and returns True by design,
+  and `_pid_started()` reads /proc so it returns None. A dead worker looks alive
+  forever. The same code proves death correctly in the container, so the eval
+  path holds and interactive use on this machine does not.
+
+**Still outstanding after the audit**: FR-205 (reverted, needs a fixture that
+requires git), FR-503/504 (deliberately UNMET per §8.2), FR-704 (`[W]`),
+NFR-402, and NFR-302's recovery half on Windows.
+
 ## FR-606: attach to a running task (2026-09-25)
 
 **Not a tuning cycle**, and no eval: the worker path is on no split. Verified by
