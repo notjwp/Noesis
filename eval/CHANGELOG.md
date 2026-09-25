@@ -5,6 +5,75 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## NFR-302 on Windows: a dead worker looked alive forever (2026-09-25)
+
+**Found by the requirement audit the same morning, fixed the same day.** No eval:
+the worker path is on no split, and the fix is platform code. Verified by killing
+a worker twice - once to reproduce, once to prove the fix.
+
+`recover()` requeues a task whose worker died, and asks `_alive()`. On Windows it
+could never get an answer, so every crashed task stranded at `running` with
+nothing to retry it. `--tasks` would show it forever.
+
+**`os.kill(pid, 0)` cannot answer the question here**, and the audit only had half
+of why. Measured, all four cases:
+
+| probe | raises | what it means |
+|---|---|---|
+| live pid | nothing | alive |
+| pid that cannot exist | `OSError` winerror 87 | dead |
+| **exited, handle still open** | **nothing** | **dead** |
+| privileged pid (System) | `PermissionError` winerror 5 | unknown |
+
+Rows 1 and 3 are indistinguishable, so the errno-87 patch the audit implied would
+STILL have been wrong. `_alive()` caught every `OSError` and returned True, which
+is its documented fail-safe - assuming death hands one task to two workers - and
+`_pid_started()` reads `/proc`, so it returned None and the start-time compare
+could not break the tie either.
+
+A hypothesis worth recording because it was REFUTED: CPython's `os.kill` on
+Windows is implemented over `TerminateProcess`, so I expected `os.kill(pid, 0)` to
+KILL a live worker rather than probe it - which would have made this a much worse
+bug, with `recover()` shooting live workers. Tested against a child process: it
+survived. Not a real failure mode on Python 3.13.5.
+
+**The fix** asks what it means. `_gone()` is the platform split - "does that pid
+hold a live process", answering True, False or None - and the start-time compare
+after it is now shared rather than duplicated. On Windows `_exited()` opens the
+process with `SYNCHRONIZE` and waits 0 ms: `WAIT_TIMEOUT` is running, signalled is
+exited, `OpenProcess` failing with `ERROR_INVALID_PARAMETER` is no such process,
+and anything else returns None so the fail-safe is untouched.
+
+**A pre-existing test refused my first attempt**, and it was right to. That
+version had no start-time compare on Windows, so a recycled pid read as its
+original owner and `test_a_recycled_pid_is_not_mistaken_for_the_original` went
+red. `_pid_started` gained a Windows branch through `GetProcessTimes`, and both
+platforms now behave the same way.
+
+**Live, end to end, twice.** Before: killed worker A mid-task, row stayed
+`running`, `recover()` returned 0. After: same kill, `_alive` returned False,
+`recover()` requeued it, worker B resumed and finished `done`, and `log.txt` still
+held exactly ONE line - so the `echo 'run' >> log.txt` that had already run did
+not run again. Four note files, one append, no duplication.
+
+**Where the tests can run is part of the finding.** The suite's home is the Linux
+container, where this code path was always correct - which is how it survived. The
+two probe tests are `skipif(os.name != "nt")`, so they skip in the container and
+pass on the host; the rest of the branch is covered on both by monkeypatching the
+probe. 1,240 -> 1,244 tests, and the host run needs `--basetemp` because pytest's
+default temp directory is not writable here.
+
+Three mutations: make the platform split return None and 2 tests go red in the
+container; stop the probe reporting `ERROR_INVALID_PARAMETER` and 3 go red on the
+host; drop the Windows start time and the recycled-pid test goes red.
+
+**§10 is now 8 of 9.** NFR-402 is the one left.
+
+Also deleted: `.agent/run_when_back.sh`, left ready on 2026-08-31 for four
+unmeasured loop changes and superseded by every scored pass since. Gitignored, so
+it is not in this commit - recorded here because it read as pending work and was
+not.
+
 ## Requirement audit (2026-09-25)
 
 **No code changed.** An evidence pass over all **1,492 recorded traces** and the

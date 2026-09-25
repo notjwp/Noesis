@@ -943,3 +943,78 @@ def test_a_caller_that_passes_its_own_trace_still_owns_it(queue):
 
     assert app.saw is mine
     assert worker.events(task_id) == [], "a caller's own list must not be stored"
+
+
+# --------------------------------------------- liveness on Windows (NFR-302)
+#
+# MEASURED 2026-09-25 by killing a real worker, not by reading the code: the row
+# stayed `running` forever and recover() never requeued it. `os.kill(pid, 0)`
+# cannot answer "is it alive" here - a live pid raises nothing, a released one
+# raises OSError 87, and one that exited while a handle is still open raises
+# nothing either - and _alive() read every OSError as "still alive" by design.
+
+
+def test_a_dead_worker_on_windows_is_not_read_as_alive(queue, monkeypatch):
+    """The defect this branch exists for: death was unprovable, so a crashed
+    worker's task stranded at `running` with nothing to retry it."""
+    monkeypatch.setattr(worker.os, "name", "nt")
+    monkeypatch.setattr(worker, "_exited", lambda pid: True)
+
+    assert worker._alive(4321, None) is False
+
+
+def test_a_live_worker_on_windows_is_left_alone(queue, monkeypatch):
+    monkeypatch.setattr(worker.os, "name", "nt")
+    monkeypatch.setattr(worker, "_exited", lambda pid: False)
+
+    assert worker._alive(4321, None) is True
+
+
+def test_windows_still_fails_safe_when_it_cannot_tell(queue, monkeypatch):
+    """A privileged pid answers ERROR_ACCESS_DENIED, which proves nothing. The
+    fail-safe is unchanged: assuming death hands one task to two workers."""
+    monkeypatch.setattr(worker.os, "name", "nt")
+    monkeypatch.setattr(worker, "_exited", lambda pid: None)
+
+    assert worker._alive(4, None) is True
+
+
+def test_recover_requeues_a_task_whose_windows_worker_died(queue, monkeypatch):
+    """End to end through recover(), because _alive() being right is only half of
+    it - the sweep has to act on the answer."""
+    task_id = worker.submit("goal")
+    worker.claim()
+    monkeypatch.setattr(worker.os, "name", "nt")
+    monkeypatch.setattr(worker, "_exited", lambda pid: True)
+
+    assert worker.recover() == 1
+    row = worker.get(task_id)
+    assert row["status"] == "queued" and row["pid"] is None
+
+
+@pytest.mark.skipif(os.name != "nt", reason="the Windows probe, on Windows")
+def test_exited_tells_a_live_process_from_one_that_has_gone(queue):
+    """The probe itself, against real processes. Skipped in the container, where
+    the suite normally runs - which is exactly why the bug survived seven
+    passing tests: the container is Linux and the Linux path was always right."""
+    import subprocess
+    import sys
+
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        assert worker._exited(child.pid) is False
+    finally:
+        child.kill()
+        child.wait()
+
+    # STILL HOLDING the handle, which is the case os.kill cannot see: the pid
+    # resolves and raises nothing, while the process has plainly exited.
+    assert worker._exited(child.pid) is True
+    assert worker._alive(child.pid, None) is False
+
+
+@pytest.mark.skipif(os.name != "nt", reason="the Windows probe, on Windows")
+def test_a_pid_that_cannot_exist_is_dead_and_a_privileged_one_is_unknown(queue):
+    assert worker._exited(999_999) is True
+    assert worker._exited(4) is None          # System: access denied, not absent
+    assert worker._exited(os.getpid()) is False

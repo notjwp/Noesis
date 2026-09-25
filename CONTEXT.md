@@ -607,11 +607,22 @@ exists.
     Measured 2026-09-25: no side effect was duplicated (log.txt held exactly one
     line), so the checkpointing half of NFR-302 is sound; the RECOVERY half does
     not run here.
-    Resolution: recorded UNMET rather than amended. Scored runs are containerised
-    (section 11), so the measured environment is unaffected and no number is in
-    question. A fix belongs in `_alive()` and needs a Windows liveness check that
-    keeps the fail-safe property; `--tasks` showing `running` forever is the
-    symptom to watch for until then.
+    FIXED the same day. `_alive()` now asks the question it actually means: a
+    platform split, `_gone()`, answers "does that pid hold a live process", and
+    the start-time compare that follows is shared by both platforms. On Windows
+    `_exited()` opens the process with SYNCHRONIZE and waits on it for 0 ms -
+    WAIT_TIMEOUT means running, signalled means it has exited, OpenProcess failing
+    with ERROR_INVALID_PARAMETER means no process carries that id, and anything
+    else (ACCESS_DENIED) still returns None so the fail-safe holds. `_pid_started`
+    gained a Windows branch through GetProcessTimes, because without one a
+    RECYCLED pid read as its original owner - a pre-existing test caught exactly
+    that and refused the first version of this fix.
+    Verified by killing a worker, not by reading the code: the row stranded at
+    `running`, recover() requeued it, a second worker resumed and finished `done`,
+    and log.txt still held exactly ONE line - so the append never re-executed.
+    A third case the audit had missed: a process that exits while a handle to it
+    is still open raises nothing from `os.kill`, so an errno-87 patch would have
+    read it as alive. Waiting on the process object sees all three.
 
   NFR-402 vs the live toolset              ADDED 2026-09-25
     MAX_SCHEMA_CHARS was documented as DERIVED - "the largest cap at which
@@ -946,18 +957,15 @@ overruns its estimate by more than double, stop and reduce scope.
   [x] Every deterministic node has unit tests that run without an API key
       1,240 tests green with no API key, no network, a read-only root filesystem
       and without the `mcp` package installed.
-  [ ] A SIGKILL mid-task, followed by resume, completes without duplicated
+  [x] A SIGKILL mid-task, followed by resume, completes without duplicated
       side effects (NFR-302)
-      NOT MET ON WINDOWS, tested live 2026-09-25 and this is where it was found.
-      Killed a worker mid-task with TerminateProcess: the row stayed `running`,
-      no side effect was duplicated - and recover() never requeued it, so the
-      task stranded and the resume half never happened. `os.kill(dead, 0)` raises
-      OSError WinError 87 rather than ProcessLookupError, and _alive() catches
-      OSError and returns True, which is the documented fail-safe. _pid_started()
-      reads /proc and returns None here, so the start-time compare cannot rescue
-      it either. The SAME code proves death correctly in the container, where
-      scored runs happen, so the eval path holds and interactive use on this
-      machine does not. See 8.2, NFR-302 on Windows.
+      Tested live on Windows 2026-09-25, in both directions. It was NOT met when
+      the audit ran that morning - recover() could not prove a dead worker dead,
+      so the row stranded at `running` and the resume never happened - and the
+      liveness probe was rewritten the same day. After the fix: worker killed
+      mid-task with TerminateProcess, row stranded at `running`, recover()
+      requeued it, a second worker resumed and finished `done`, and log.txt held
+      exactly ONE line, so the `echo >> log.txt` never re-executed. See 8.2.
   [x] Adding a new tool touches exactly one file (NFR-601)
       TRUE SINCE 2026-08-23, and it was NOT before: TOOLS carried the function
       and the schema while RISK was a literal in policy.py, so every built-in

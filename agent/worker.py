@@ -106,17 +106,88 @@ def events(task_id: str, after: int = 0) -> list[dict]:
     return out
 
 
+def _created(pid: int) -> float | None:
+    """When that process started, from the kernel, or None when it will not say.
+
+    A FILETIME is 100-ns ticks from 1601; the epoch offset converts it. Only ever
+    compared with another value from this same function.
+    """
+    import ctypes
+    import ctypes.wintypes as w
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    handle = kernel32.OpenProcess(_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return None
+    created, exited, kernel, user = (w.FILETIME() for _ in range(4))
+    try:
+        if not kernel32.GetProcessTimes(handle, ctypes.byref(created),
+                                        ctypes.byref(exited),
+                                        ctypes.byref(kernel), ctypes.byref(user)):
+            return None
+    finally:
+        kernel32.CloseHandle(handle)
+    ticks = (created.dwHighDateTime << 32) | created.dwLowDateTime
+    return (ticks - _FILETIME_EPOCH) / 1e7
+
+
 def _pid_started(pid: int) -> float | None:
     """When `pid` started, or None when that cannot be determined.
 
-    Read from /proc, which is where the worker runs. None on any other platform,
+    Read from /proc on Linux and from the kernel on Windows. None anywhere else,
     and the liveness check below treats None as "cannot prove death".
     """
+    if os.name == "nt":
+        return _created(pid)
     try:
         with open(f"/proc/{pid}/stat", encoding="utf-8") as handle:
             return float(handle.read().rsplit(")", 1)[1].split()[19])
     except (OSError, IndexError, ValueError):
         return None
+
+
+_SYNCHRONIZE = 0x0010_0000           # OpenProcess: enough to wait on it
+_WAIT_TIMEOUT = 0x0000_0102          # still running
+_ERROR_INVALID_PARAMETER = 87        # no process carries that id any more
+_QUERY_LIMITED_INFORMATION = 0x1000  # OpenProcess: enough to read its times
+_FILETIME_EPOCH = 116_444_736_000_000_000
+
+
+def _exited(pid: int) -> bool | None:
+    """Whether Windows says that process HAS EXITED. None when it will not say.
+
+    `os.kill(pid, 0)` cannot answer it here: a live pid raises nothing, a
+    released one raises OSError 87, and one that exited while a handle is still
+    open raises nothing either. Waiting on the process object separates all three.
+    """
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    handle = kernel32.OpenProcess(_SYNCHRONIZE, False, pid)
+    if not handle:
+        if ctypes.get_last_error() == _ERROR_INVALID_PARAMETER:
+            return True
+        return None                      # access denied, or something unforeseen
+    try:
+        return kernel32.WaitForSingleObject(handle, 0) != _WAIT_TIMEOUT
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _gone(pid: int) -> bool | None:
+    """True when that pid demonstrably holds no live process, None when the
+    question cannot be answered. Split by platform; the caller owns the rest."""
+    if os.name == "nt":
+        return _exited(pid)
+    # No fast path for "that is my own pid": it would skip the start-time compare,
+    # which is the only thing distinguishing the owner from a recycled pid.
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except (PermissionError, OSError):
+        return None                      # exists, or cannot be interrogated
+    return False
 
 
 def _alive(pid: int | None, started: float | None) -> bool:
@@ -128,14 +199,11 @@ def _alive(pid: int | None, started: float | None) -> bool:
     """
     if pid is None:
         return False
-    # No fast path for "that is my own pid": it would skip the start-time compare,
-    # which is the only thing distinguishing the owner from a recycled pid.
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
+    gone = _gone(pid)
+    if gone is None:
+        return True                      # cannot prove death
+    if gone:
         return False
-    except (PermissionError, OSError):
-        return True                      # exists, or cannot be interrogated
     if started is None:
         return True                      # cannot compare, so cannot prove death
     now = _pid_started(pid)
