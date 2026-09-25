@@ -899,11 +899,11 @@ def run_dir(args, cases) -> Path | None:
             encoding="utf-8")
         return out
 
-    existing = sorted(p for p in root.glob("*") if (p / "manifest.json").exists())
+    existing = sorted(root.glob("*/manifest.json"), key=_started)
     if not existing:
         print("nothing to continue: no previous run has a manifest", file=sys.stderr)
         return None
-    out = existing[-1]
+    out = existing[-1].parent
     have = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     differs = {k: (have.get(k), v) for k, v in want.items() if have.get(k) != v}
     if differs:
@@ -916,6 +916,17 @@ def run_dir(args, cases) -> Path | None:
     # baseline with no visible symptom.
     print(f"continuing {out.name}")
     return out
+
+
+def _started(manifest: Path) -> str:
+    """When that run began, by its own record. Sorting run directories by NAME
+    put `control-20260922-e65d94b` after every timestamp, so --continue picked it
+    every time and then refused it - measured 2026-09-25, no rows produced."""
+    try:
+        return json.loads(manifest.read_text(encoding="utf-8"))["started"]
+    except (OSError, ValueError, KeyError):
+        return datetime.fromtimestamp(manifest.stat().st_mtime,
+                                      timezone.utc).isoformat()
 
 
 def await_exclusive_workspace(timeout: float = 900.0) -> bool:

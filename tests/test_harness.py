@@ -66,6 +66,27 @@ def test_completed_excludes_blocked_so_continue_retries_them():
     assert harness.completed(rows) == {("a", 0)}
 
 
+def test_continue_picks_the_latest_run_not_the_last_name(tmp_path):
+    """MEASURED 2026-09-25: `--continue` sorted run directories by NAME, so
+    `control-20260922-e65d94b` came after every timestamp and it resumed that,
+    then refused it for describing a different run. A resume produced no rows."""
+    import json
+
+    for name, started in (("20260924T140618Z", "2026-09-24T14:06:18+00:00"),
+                          ("control-20260922-e65d94b", "2026-09-22T15:44:10+00:00")):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "manifest.json").write_text(
+            json.dumps({"started": started}), encoding="utf-8")
+
+    newest = max(tmp_path.glob("*/manifest.json"), key=harness._started)
+    assert newest.parent.name == "20260924T140618Z"
+
+
+def test_a_manifest_that_cannot_say_when_it_started_falls_back_to_its_mtime(tmp_path):
+    (tmp_path / "manifest.json").write_text("{}", encoding="utf-8")
+    assert harness._started(tmp_path / "manifest.json")
+
+
 def test_turn_counts_are_shown_raw_not_averaged():
     """The spec asks for variance across runs. 3/10/4 shows it; a median hides it."""
     rows = [row("a", 0, turns=3), row("a", 1, turns=10), row("a", 2, turns=4)]
