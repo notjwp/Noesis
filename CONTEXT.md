@@ -328,6 +328,13 @@ Only [M] items are in scope for the first build. See section 9.
                redirected index, a URL, git+, an archive or a replaced
                PIP_CONFIG_FILE ask.
   FR-205  [S]  Perform git status, diff, branch, add, commit, push.
+               BUILT AND REVERTED 2026-09-25. One `git` tool, no shell, with
+               EXECUTES carrying a `git ` prefix so the force-push rules still
+               bit. dev held at 14/14 (1 blocked) and the tool was called 0
+               times in 161 calls, so it cost 775 schema chars per turn and
+               bought nothing measurable. Do not rebuild it without a fixture
+               that REQUIRES git: no case is a repository and no goal mentions
+               one, so no existing split can measure it.
   FR-206  [S]  Provide repository inspection (tree, grep, symbol search) that
                returns paths and line numbers, not file contents.
   FR-207  [M]  Register a new tool by decorating one function; derive its JSON

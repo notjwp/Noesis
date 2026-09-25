@@ -10,7 +10,7 @@ table). Read those when you need history; do not copy history back into here.
 ## State
 
 `act -> gate -> execute -> reflect` over a two-provider adapter, a policy gate that is the boundary
-(a kernel-enforced sandbox for scored runs only), CLI and Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,222 offline tests**, green with no API key, no network, a
+(a kernel-enforced sandbox for scored runs only), CLI and Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,224 offline tests**, green with no API key, no network, a
 read-only root filesystem, and without the `mcp` package installed.
 
 | | |
@@ -61,6 +61,16 @@ Ordered by how often they have caught something.
   four of six real cases, and they are the ones that were tuned against.
 - **A pass rate is not evidence for a mechanism that did not fire.** Check the instrumentation says
   the thing ran before attributing anything to it.
+- **A bar that cannot move is not a bar.** FR-205 was pre-registered as "dev 15/15,
+  tools 9/9, revert if neither moves" while both splits were AT ceiling, so the revert
+  condition was guaranteed before the run started - the same arithmetic as Phase R's
+  11/11. For a capability at ceiling the measurable question is USE, not pass rate:
+  `git` was called 0 times in 161 calls. Check a bar has room in it.
+- **A capability no fixture asks for cannot be measured by the splits you have.** The
+  `git` tool scored 0 calls because no case is a git REPOSITORY and no goal mentions
+  git - `git status` would have said `fatal: not a git repository`. Check the fixture's
+  WORLD, not only its wording, before writing the bar. Reverted anyway: unmeasured
+  plus 775 schema chars per turn is a cost with nothing on the other side.
 - **A gate rule that never fired in a passing run is not proven safe.** FR-204's first
   version denied `pip install -r ./requirements.txt`, because a clause for a bare local
   path matches every FLAG that takes one. `missing-dep` scored 3/3 and the rule fired 0
@@ -236,6 +246,11 @@ Ordered by how often they have caught something.
   sleep: 6 of 6 back-to-back searches returned results. Declare every host the library may
   dial, not the one you hoped it would.
 
+- **`--continue` resumed the wrong directory for weeks.** It sorted run directories by
+  NAME, so `control-20260922-e65d94b` sorted after every `2026...` timestamp and every
+  resume picked the real-repo control, then refused it. Fixed 2026-09-25 to sort by each
+  manifest's own `started`. A resume that refuses is visible; one that appends into the
+  wrong baseline would not have been.
 - **Never pipe the harness through `tail`**, and never wrap it in `timeout`. `tail` buffers until
   exit so a hang looks like progress; `timeout` kills the client but leaves the container running,
   and the orphan corrupts the shared workspace mid-case. Three runs were lost that way. Use
@@ -373,7 +388,7 @@ python eval/harness.py --case fix-import --runs 3                  # one case, r
 scripts/reset.sh <case-id>        # restore /workspace to a fixture's state (idempotent)
 powershell -File scripts/install-tasks.ps1        # run --channel and --worker at logon
 powershell -File scripts/install-tasks.ps1 -Remove
-pytest                            # 1,222 tests, no API key, no network
+pytest                            # 1,224 tests, no API key, no network
 ```
 
 Tests run in the container, which is the measured environment: read-only root, `--network none`,

