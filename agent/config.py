@@ -236,10 +236,10 @@ TAIL_LINES = 20
 
 # --- tools (Phase L) -------------------------------------------------------
 
-# Schemas are re-sent every request and cache_read_tokens is 0 on all 335
-# recorded rows, so this is a per-turn tax. 10,000 is DERIVED: the largest cap
-# at which NFR-402's median still holds. Re-measure if the provider changes.
-MAX_SCHEMA_CHARS = 10_000
+# Schemas are re-sent every request and cache_read_tokens is 0 on every recorded
+# row, so this is a per-turn tax: +1,000 chars is ~4,000 tokens a run at the
+# measured median of 12 calls. A GUARD, not a budget - see §8.2, 2026-09-25.
+MAX_SCHEMA_CHARS = 12_000
 
 # Declared rather than discovered: a server offering a tool absent from `risk`
 # gets it refused, never defaulted. fetch is `read` like web_search; the egress

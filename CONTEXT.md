@@ -582,6 +582,40 @@ exists.
     Resolution: FR-402 spill-and-path. Costs one extra tool call, buys a
     bounded context.
 
+  NFR-402 vs the live toolset              ADDED 2026-09-25
+    MAX_SCHEMA_CHARS was documented as DERIVED - "the largest cap at which
+    NFR-402's median still holds". That derivation no longer holds, and the
+    cap was not what broke it.
+    Measured over the 32 scored rows of the three dev passes on 2026-09-24/25:
+      - median run                 70,700 tokens, against NFR-402's 60,000
+      - median model calls         12
+      - live schema                7,650 chars (built-ins 5,572; the rest is
+                                   memory and MCP, which only appear at run
+                                   time - a host-side count of the built-ins
+                                   alone reads 5,572 and is misleading)
+      - schema cost per run        30,600 tokens, 43% of the median, at the
+                                   conservative 3 chars/token the rig uses;
+                                   ~23,000 and 32% at a realistic 4
+      - per 1,000 schema chars     ~4,000 tokens per run
+    So NFR-402's ceiling is exceeded TODAY, by 18%, with no browser and nothing
+    unusual declared. The old sentence implied the cap was holding a line that
+    had already been crossed, which is the shape of a default that asserts the
+    safe answer.
+    Resolution, and it is two separate things that were being conflated:
+      - The CAP is a GUARD, not a budget. It consumes nothing; it exists so a
+        costly tool addition fails loudly at activate() instead of sliding in.
+        Set to 12,000 on 2026-09-25 - enough for one more small server, tight
+        enough to still refuse. It is no longer claimed to be derived from
+        NFR-402, because no value of it can be: the breach is in what is
+        already declared.
+      - NFR-402's 60,000 is UNMET and recorded as unmet rather than amended.
+        Re-deriving it means deciding what a median run should cost with
+        memory and MCP live, which is a measurement of its own and not a
+        number to pick here. §10's checkbox for it stays unticked.
+    This does NOT reopen FR-503/504: the entry above resolved those to stay
+    UNMET until a case exists that web_search plus fetch cannot solve, and a
+    larger cap is not such a case.
+
   FR-503/504 vs NFR-402                    UPDATED 2026-08-31
     Browser automation is the largest token consumer in the system and will
     breach the cost target alone. This is why it sits at [S] behind FR-501/502:
