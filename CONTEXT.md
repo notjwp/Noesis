@@ -416,6 +416,14 @@ Only [M] items are in scope for the first build. See section 9.
                or failed.
   FR-605  [S]  Trigger tasks on a cron schedule.
   FR-606  [S]  Allow a chat session to attach to and detach from a running task.
+               BUILT 2026-09-25, READ-ONLY, and that is the whole design: a
+               worker runs autonomous, where `confirm` is already `deny`, so
+               there is nothing for a watcher to answer. `task_events` (v5)
+               is written by a list subclass the graph never learns about,
+               `--attach` tails it, `/api/tasks/<id>/trace` serves it through
+               the existing redact chokepoint, and conclude() drops events
+               older than 7 days. Verified LIVE, not only in tests: 139 events
+               from a real worker run.
   FR-607  [S]  Cap the number of concurrent workers.
 
 6.7 INTERFACE (FR-7xx)

@@ -182,6 +182,22 @@ TASKS: list[tuple[str, list[str]]] = [
                )""",
         ],
     ),
+    (
+        # v5: what a RUNNING task is doing, so a chat can watch one (FR-606).
+        # Keyed by (task, seq), which is also the read order, so the composite
+        # PRIMARY KEY is that index and a second one would be dead weight.
+        "task_events",
+        [
+            """CREATE TABLE IF NOT EXISTS task_events (
+                   task_id TEXT NOT NULL,
+                   seq     INTEGER NOT NULL,
+                   at      REAL NOT NULL,
+                   kind    TEXT NOT NULL,
+                   payload TEXT NOT NULL,
+                   PRIMARY KEY (task_id, seq)
+               )""",
+        ],
+    ),
 ]
 
 

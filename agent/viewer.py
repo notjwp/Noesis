@@ -76,6 +76,12 @@ def _tasks() -> list[dict]:
     return worker.tasks()
 
 
+def _trace(task_id: str) -> list[dict]:
+    from agent import worker
+
+    return worker.events(task_id)
+
+
 def _schedules() -> list[dict]:
     from agent import worker
 
@@ -155,6 +161,11 @@ Promise.all([get('/api/tasks'),get('/api/threads'),get('/api/runs'),
 </script>"""
 
 
+# One task's trace, which carries tool OUTPUT - so it leaves through the same
+# redact chokepoint below as everything else, not a route of its own.
+_TRACE = ("/api/tasks/", "/trace")
+
+
 def serve_path(path: str, token: str) -> tuple[int, str, str]:
     """Answer one request as (status, content type, body).
 
@@ -173,7 +184,12 @@ def serve_path(path: str, token: str) -> tuple[int, str, str]:
         "/api/attention": _attention,
         "/api/runs": _runs,
     }
-    source = routes.get(path.split("?", 1)[0])
+    bare = path.split("?", 1)[0]
+    source = routes.get(bare)
+    if source is None and bare.startswith(_TRACE[0]) and bare.endswith(_TRACE[1]):
+        task_id = bare[len(_TRACE[0]):-len(_TRACE[1])]
+        if task_id:
+            source = lambda tid=task_id: _trace(tid)      # noqa: E731
     if source is None:
         return 404, "text/plain; charset=utf-8", "no such path"
     try:

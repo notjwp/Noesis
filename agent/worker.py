@@ -32,6 +32,7 @@ NFR-602: every function below is testable with no API key and no network.
 """
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import time
@@ -52,6 +53,57 @@ def _connect() -> sqlite3.Connection:
     # transaction per migration - `with conn` still begins one under autocommit.
     migrations.apply(conn, migrations.TASKS)
     return conn
+
+
+# A concluded task's events are kept this long, then dropped by conclude().
+# Without it the store grows without bound: a trace is ~100 rows per task.
+EVENT_RETENTION = 7 * 86_400
+
+
+class EventLog(list):
+    """A trace list that also writes each entry to the store, so a chat can
+    watch a running task (FR-606).
+
+    The same mechanism as cli.LiveTrace: every node already reports through
+    `trace.append`, so nothing in the graph learns that a store exists.
+    """
+
+    def __init__(self, task_id: str) -> None:
+        super().__init__()
+        self.task_id = task_id
+
+    def append(self, entry: dict) -> None:
+        super().append(entry)
+        # A store that cannot be written must not fail a task that is otherwise
+        # fine - the same swallow as the rest of this module's bookkeeping. seq
+        # is 1-based so that events(after=0) returns the first entry.
+        try:
+            with _connect() as conn:
+                conn.execute(
+                    "INSERT OR IGNORE INTO task_events"
+                    " (task_id, seq, at, kind, payload) VALUES (?, ?, ?, ?, ?)",
+                    (self.task_id, len(self), time.time(),
+                     str(entry.get("kind") or "?"), json.dumps(entry, default=str)))
+        except (sqlite3.Error, ValueError, TypeError):
+            pass
+
+
+def events(task_id: str, after: int = 0) -> list[dict]:
+    """That task's trace entries past `after`, in order. Read-only, so a reader
+    can never disturb the run it is watching."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT seq, at, kind, payload FROM task_events"
+            " WHERE task_id=? AND seq > ? ORDER BY seq",
+            (task_id, after)).fetchall()
+    out = []
+    for row in rows:
+        try:
+            entry = json.loads(row["payload"])
+        except ValueError:
+            entry = {"kind": row["kind"]}
+        out.append({**entry, "seq": row["seq"], "at": row["at"]})
+    return out
 
 
 def _pid_started(pid: int) -> float | None:
@@ -174,6 +226,13 @@ def conclude(task_id: str, *, status: str, verdict: str = "",
             (status, verdict, detail, time.time(), task_id))
         if cur.rowcount != 1:
             return None
+        try:
+            conn.execute(
+                "DELETE FROM task_events WHERE task_id IN (SELECT id FROM tasks"
+                " WHERE finished_at IS NOT NULL AND finished_at < ?)",
+                (time.time() - EVENT_RETENTION,))
+        except sqlite3.Error:
+            pass                  # retention is housekeeping, never a failure
         return _row(conn.execute(
             "SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone())
 
@@ -414,7 +473,8 @@ def run_once(app, task: dict, trace: list | None = None) -> dict | None:
     from agent.graph import _final_text, new_state
 
     cfg = {"configurable": {"thread_id": task["id"], "autonomous": True,
-                            "trace": trace if trace is not None else []}}
+                            "trace": (trace if trace is not None
+                                      else EventLog(task["id"]))}}
     prior = app.get_state(cfg).values or {}
     try:
         # None resumes a checkpointed thread; a fresh state seeds a new one. A

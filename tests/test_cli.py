@@ -712,3 +712,73 @@ def test_update_reports_what_changed(monkeypatch, capsys):
 
     said = capsys.readouterr().out
     assert "abc1234" in said and "def5678" in said
+
+
+# ===================================================================== FR-606
+
+
+def test_attach_to_an_unknown_task_says_so_and_exits_non_zero(capsys, monkeypatch):
+    from agent import worker
+
+    monkeypatch.setattr(worker, "get", lambda task_id: None)
+
+    assert cli.attach("nosuchid") == 1
+    assert "no such task" in capsys.readouterr().err
+
+
+def test_attach_prints_the_trace_and_stops_when_the_task_ends(capsys, monkeypatch):
+    """It follows a RUNNING task and returns on its own once the task is
+    terminal - a reader that had to be killed would be a worse tool than none."""
+    from agent import worker
+
+    states = iter([{"id": "t1", "status": "running", "goal": "g"},
+                   {"id": "t1", "status": "running", "goal": "g"},
+                   {"id": "t1", "status": "done", "goal": "g",
+                    "verdict": "done", "detail": "the answer"}])
+    monkeypatch.setattr(worker, "get", lambda task_id: next(states))
+    monkeypatch.setattr(worker, "events", lambda task_id, after=0: (
+        [{"seq": 1, "kind": "model", "billed_tokens": 1_000},
+         {"seq": 2, "kind": "tool", "tool": "run_shell", "summary": "pytest -q",
+          "duration_ms": 900}] if after == 0 else []))
+    monkeypatch.setattr(cli.time, "sleep", lambda _s: None)
+
+    assert cli.attach("t1") == 0
+
+    out = capsys.readouterr().out
+    assert "turn 1" in out and "1,000 tokens" in out
+    assert "run_shell" in out and "pytest -q" in out
+    assert "the answer" in out
+
+
+def test_attach_asks_only_for_what_it_has_not_seen(capsys, monkeypatch):
+    """Polling from 0 every second would re-print the whole trace each time."""
+    from agent import worker
+
+    asked = []
+    monkeypatch.setattr(worker, "get",
+                        lambda task_id: {"id": "t1", "status": "done", "goal": "g"})
+
+    def events(task_id, after=0):
+        asked.append(after)
+        return [{"seq": 5, "kind": "node", "node": "act"}] if after == 0 else []
+
+    monkeypatch.setattr(worker, "events", events)
+    cli.attach("t1")
+
+    assert asked == [0], "one pass for a task that is already terminal"
+
+
+def test_detaching_leaves_the_task_alone(capsys, monkeypatch):
+    from agent import worker
+
+    monkeypatch.setattr(worker, "get",
+                        lambda task_id: {"id": "t1", "status": "running", "goal": "g"})
+    monkeypatch.setattr(worker, "events", lambda task_id, after=0: [])
+    monkeypatch.setattr(cli.time, "sleep", _interrupt)
+
+    assert cli.attach("t1") == 0
+    assert "detached" in capsys.readouterr().out
+
+
+def _interrupt(_seconds):
+    raise KeyboardInterrupt

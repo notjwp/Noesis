@@ -812,3 +812,134 @@ def test_cancelling_an_unknown_task_returns_None(queue):
     from agent import worker
 
     assert worker.cancel('nosuchid') is None
+
+
+# ===================================================================== FR-606
+
+
+def test_events_land_in_order_and_survive_a_reopened_store(queue):
+    task_id = worker.submit("watch me")
+    log = worker.EventLog(task_id)
+
+    log.append({"kind": "model", "billed_tokens": 1_200})
+    log.append({"kind": "tool", "tool": "run_shell", "summary": "pytest -q"})
+    log.append({"kind": "terminal", "verdict": "done"})
+
+    # Read through a fresh connection, which is what --attach in another process
+    # actually does - an in-memory list would pass this and prove nothing.
+    rows = worker.events(task_id)
+    assert [r["seq"] for r in rows] == [1, 2, 3]
+    assert [r["kind"] for r in rows] == ["model", "tool", "terminal"]
+    assert rows[0]["billed_tokens"] == 1_200
+
+
+def test_events_pages_from_a_sequence(queue):
+    task_id = worker.submit("watch me")
+    log = worker.EventLog(task_id)
+    for n in range(4):
+        log.append({"kind": "node", "node": f"n{n}"})
+
+    assert [r["seq"] for r in worker.events(task_id, after=0)] == [1, 2, 3, 4]
+    assert [r["seq"] for r in worker.events(task_id, after=2)] == [3, 4]
+    assert worker.events(task_id, after=4) == []
+
+
+def test_the_first_entry_is_not_skipped_by_the_default(queue):
+    """seq is 1-based for exactly this reason: at 0-based, `after=0` - the only
+    sensible starting point for a reader - would never return entry zero."""
+    task_id = worker.submit("watch me")
+    worker.EventLog(task_id).append({"kind": "model"})
+
+    assert len(worker.events(task_id)) == 1
+
+
+def test_a_store_that_cannot_be_written_does_not_fail_the_task(queue, monkeypatch):
+    """A task that did the work must not be reported failed because its own
+    bookkeeping broke."""
+    task_id = worker.submit("watch me")
+    log = worker.EventLog(task_id)
+
+    def broken():
+        raise worker.sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(worker, "_connect", broken)
+    log.append({"kind": "model"})          # must not raise
+
+    assert list(log) == [{"kind": "model"}]
+
+
+def test_events_of_a_task_that_never_ran_are_empty_not_an_error(queue):
+    assert worker.events("nosuchid") == []
+
+
+def test_a_concluded_task_keeps_its_events_until_the_retention_window(queue):
+    task_id = worker.submit("watch me")
+    worker.claim()
+    worker.EventLog(task_id).append({"kind": "model"})
+
+    worker.conclude(task_id, status="done", verdict="done")
+
+    assert len(worker.events(task_id)) == 1
+
+
+def test_conclude_drops_events_of_tasks_finished_long_ago(queue):
+    """Otherwise the store grows without bound - a trace is ~100 rows a task."""
+    old = worker.submit("last week")
+    worker.claim()
+    worker.EventLog(old).append({"kind": "model"})
+    worker.conclude(old, status="done", verdict="done")
+    with worker._connect() as conn:
+        conn.execute("UPDATE tasks SET finished_at=? WHERE id=?",
+                     (time.time() - worker.EVENT_RETENTION - 60, old))
+
+    # A later conclude() is the sweep, so it takes a second task to trigger one.
+    fresh = worker.submit("today")
+    worker.claim()
+    worker.EventLog(fresh).append({"kind": "model"})
+    worker.conclude(fresh, status="done", verdict="done")
+
+    assert worker.events(old) == []
+    assert len(worker.events(fresh)) == 1
+
+
+class _StubApp:
+    """Stands in for the compiled graph: records into whatever trace it is given."""
+
+    def __init__(self, entry: dict | None = None) -> None:
+        self.entry = entry
+        self.saw = None
+
+    def get_state(self, cfg):
+        return type("S", (), {"values": {}})()
+
+    def invoke(self, state, cfg):
+        self.saw = cfg["configurable"]["trace"]
+        if self.entry is not None:
+            self.saw.append(self.entry)
+        return {"verdict": "done", "messages": []}
+
+
+def test_run_once_records_its_trace_without_being_asked(queue):
+    """The whole point of FR-606: an ordinary worker run is watchable, with no
+    flag and no second code path."""
+    task_id = worker.submit("do the thing")
+    task = worker.claim()
+
+    worker.run_once(_StubApp({"kind": "model", "billed_tokens": 7}), task)
+
+    rows = worker.events(task_id)
+    assert [r["kind"] for r in rows] == ["model"]
+    assert rows[0]["billed_tokens"] == 7
+
+
+def test_a_caller_that_passes_its_own_trace_still_owns_it(queue):
+    """The harness passes a plain list and must keep getting exactly that."""
+    task_id = worker.submit("do the thing")
+    task = worker.claim()
+    mine: list = []
+    app = _StubApp({"kind": "model"})
+
+    worker.run_once(app, task, trace=mine)
+
+    assert app.saw is mine
+    assert worker.events(task_id) == [], "a caller's own list must not be stored"

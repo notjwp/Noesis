@@ -459,6 +459,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="show cron schedules, soonest first")
     parser.add_argument("--unschedule", metavar="SCHEDULE_ID",
                         help="remove a cron schedule")
+    parser.add_argument("--attach", metavar="TASK_ID",
+                        help="watch a running task; ctrl-c detaches")
     parser.add_argument("--tasks", action="store_true",
                         help="show queued and finished tasks")
     args = parser.parse_args(argv)
@@ -510,6 +512,43 @@ def main(argv: list[str] | None = None) -> int:
         skills.deactivate()
 
 
+def attach(task_id: str) -> int:
+    """Follow a running task's trace until it leaves the queue (FR-606).
+
+    READ-ONLY, and that is not a shortcoming: a worker runs autonomous, where
+    `confirm` is already `deny`, so there is nothing here for a human to answer.
+    """
+    from agent import worker
+
+    task = worker.get(task_id)
+    if task is None:
+        print(f"no such task: {task_id}", file=sys.stderr)
+        return 1
+    print(f"{task_id}  {task['status']}  {task['goal']}")
+    seen, turn, tokens = 0, 0, 0
+    try:
+        while True:
+            for entry in worker.events(task_id, after=seen):
+                seen = entry["seq"]
+                kind = entry.get("kind")
+                if kind == "model":
+                    turn += 1
+                    tokens += entry.get("billed_tokens", 0)
+                    print(f"\nturn {turn}   {tokens:,} tokens", flush=True)
+                elif kind == "tool":
+                    print("  " + _tool_line(entry), flush=True)
+            task = worker.get(task_id) or task
+            if task["status"] not in ("queued", "running"):
+                break
+            time.sleep(1.0)
+    except KeyboardInterrupt:
+        print("\ndetached - the task keeps running")
+        return 0
+    print(f"\n{RULE}\n{task['status']}  {task.get('verdict') or ''}  "
+          f"{task.get('detail') or ''}".rstrip())
+    return 0
+
+
 def list_tasks() -> int:
     """FR-604, and the other half of FR-703's "list threads and tasks"."""
     from agent import worker
@@ -534,6 +573,9 @@ def _dispatch(args, app, parser) -> int:
 
     if args.tasks:
         return list_tasks()
+
+    if args.attach:
+        return attach(args.attach)
 
     if args.review:
         items = worker.attention()
@@ -583,7 +625,7 @@ def _dispatch(args, app, parser) -> int:
         task_id = worker.submit(args.submit)
         print(f"queued {task_id}")
         print("run it with:   python -m agent --worker")
-        print("watch it with: python -m agent --tasks")
+        print(f"watch it with: python -m agent --attach {task_id}")
         return 0
 
     if args.update:

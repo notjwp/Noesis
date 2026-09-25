@@ -169,3 +169,33 @@ def test_runs_are_found_relative_to_the_REPO_not_the_workspace(monkeypatch,
         pytest.skip("no recorded runs in this checkout")
 
     assert v._runs(), "the runs directory was not found from the repo"
+
+
+def test_one_task_trace_is_served_and_redacted(monkeypatch, tmp_path):
+    """A trace carries tool OUTPUT, so it must leave through the same redact
+    chokepoint as every other route - checked with a key planted in a payload."""
+    from agent import worker
+
+    monkeypatch.setattr(viewer, "_secret", lambda: "s3cret")
+    monkeypatch.setattr(worker, "events", lambda task_id: [
+        {"seq": 1, "kind": "tool", "tool": "run_shell",
+         "summary": "echo sk-ant-api03-DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF"}])
+
+    status, kind, body = viewer.serve_path("/api/tasks/abc123/trace", "s3cret")
+
+    assert status == 200 and kind == "application/json"
+    assert "DEADBEEF" not in body
+    assert "run_shell" in body
+
+
+def test_a_trace_path_without_a_task_id_is_not_a_route(monkeypatch):
+    monkeypatch.setattr(viewer, "_secret", lambda: "s3cret")
+
+    assert viewer.serve_path("/api/tasks//trace", "s3cret")[0] == 404
+    assert viewer.serve_path("/api/tasks/abc/traces", "s3cret")[0] == 404
+
+
+def test_a_trace_is_refused_without_the_token(monkeypatch):
+    monkeypatch.setattr(viewer, "_secret", lambda: "s3cret")
+
+    assert viewer.serve_path("/api/tasks/abc/trace", "wrong")[0] == 401

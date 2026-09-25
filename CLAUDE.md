@@ -10,7 +10,7 @@ table). Read those when you need history; do not copy history back into here.
 ## State
 
 `act -> gate -> execute -> reflect` over a two-provider adapter, a policy gate that is the boundary
-(a kernel-enforced sandbox for scored runs only), CLI and Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,224 offline tests**, green with no API key, no network, a
+(a kernel-enforced sandbox for scored runs only), CLI and Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,240 offline tests**, green with no API key, no network, a
 read-only root filesystem, and without the `mcp` package installed.
 
 | | |
@@ -364,6 +364,11 @@ python -m agent --resume <id>     # continue a thread; a task's identity IS its 
 python -m agent --submit "goal"   # queue a task, print its id, return immediately
 python -m agent --worker          # drain the queue; resumes anything a dead worker left
 python -m agent --tasks           # queued / running / awaiting-approval / done / failed
+python -m agent --attach <id>     # follow a running task's trace; ctrl-c detaches
+                                  # READ-ONLY on purpose: a worker runs
+                                  # autonomous, where confirm is already deny,
+                                  # so there is nothing to answer. Events are
+                                  # kept 7 days after a task concludes
 
 python -m agent --doctor          # every precondition, each line ok or FAIL; changes nothing
 python -m agent --cancel <id>     # stop a queued or running task
@@ -388,7 +393,7 @@ python eval/harness.py --case fix-import --runs 3                  # one case, r
 scripts/reset.sh <case-id>        # restore /workspace to a fixture's state (idempotent)
 powershell -File scripts/install-tasks.ps1        # run --channel and --worker at logon
 powershell -File scripts/install-tasks.ps1 -Remove
-pytest                            # 1,224 tests, no API key, no network
+pytest                            # 1,240 tests, no API key, no network
 ```
 
 Tests run in the container, which is the measured environment: read-only root, `--network none`,

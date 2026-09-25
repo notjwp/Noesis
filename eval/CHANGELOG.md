@@ -5,6 +5,62 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## FR-606: attach to a running task (2026-09-25)
+
+**Not a tuning cycle**, and no eval: the worker path is on no split. Verified by
+hand against a real run, because this project has already shipped a capability
+with seven passing tests that was unusable.
+
+A task id IS a thread id, so `--resume` already reopened a FINISHED task. What
+was missing was watching one still going, and `run_once` passed a plain list as
+`trace` and threw it away.
+
+**Read-only, and that is the design rather than a limitation.** A worker runs
+autonomous, where `confirm` degrades to `deny` (FR-304), so no human is being
+asked anything while it runs - there is nothing for a watcher to answer. Taking
+over interactively would need a cooperative-stop protocol between two processes
+and would make `autonomous` a value that changes mid-run, which the gate reads.
+
+**The mechanism was already in the codebase.** `cli.LiveTrace` is a list
+subclass whose `append` renders, precisely so that graph.py needs no callback
+and no streaming API. `worker.EventLog` is the same trick pointed at SQLite:
+every node already reports through `trace.append`, so nothing in the graph
+learns that a store exists, and a caller passing its own list - the harness -
+keeps getting exactly that.
+
+- `migrations.py` v5: `task_events(task_id, seq, at, kind, payload)`. The plan
+  asked for an index on `(task_id, seq)`; the composite PRIMARY KEY IS that
+  index in SQLite, so a second one would be dead weight.
+- **seq is 1-based**, which is not cosmetic: at 0-based, `after=0` - the only
+  sensible starting point for a reader - never returns the first entry. The
+  mutation that makes it 0-based turns 6 tests red.
+- A write failure is swallowed, like the rest of the worker's bookkeeping. A
+  task that did the work must not be reported failed because its own log broke.
+- `conclude()` sweeps events of tasks finished more than 7 days ago. A trace is
+  ~100 rows a task - the live run recorded **139** - so unbounded is not an
+  option.
+- `/api/tasks/<id>/trace` goes through the SAME `redact()` chokepoint as every
+  other route, because a trace carries tool output. An empty id is a 404, which
+  a test caught: `/api/tasks//trace` was being served 200.
+
+**Live check.** `--submit`, `--worker` in the background, `--attach` in the
+foreground: it printed 11 turns with the tool line per call, returned on its own
+when the task went terminal, and the store held 139 events across nine kinds
+afterwards. The viewer route served them as 15,544 chars of JSON. `--attach` on
+an unknown id prints to stderr and exits 1.
+
+I read a zero first and it was my own error, not the code: a bare `python -c`
+does not load `.env` - only the entry point does (CE-05) - so I was reading
+`~/.noesis` while the CLI wrote `D:/agent-state`.
+
+`--submit` now says `watch it with: python -m agent --attach <id>` rather than
+pointing at `--tasks`, which only ever showed a status.
+
+**No schema cost** - this is a CLI flag and a table, not a tool the model sees.
+1,224 -> 1,240 tests. Three mutations: drop the swallow and a locked store fails
+the task; make seq 0-based and 6 tests go red; remove `redact` from the
+chokepoint and 3 go red, two of which were already guarding it.
+
 ## FR-205: git as a tool - REVERTED (2026-09-25)
 
 **It was called 0 times in 161 calls.** The guard was clean and the tool earned
