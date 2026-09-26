@@ -36,7 +36,7 @@ import re
 import sys
 from pathlib import Path
 
-from agent import config, memory, policy
+from agent import config, policy
 
 # Names this module put into policy.RISK, so deactivate() removes exactly those.
 # Per-module, like mcp.py and memory.py: a snapshot taken by whichever imported

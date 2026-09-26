@@ -163,7 +163,7 @@ def census(found: list[dict]) -> None:
           f"{sum(tools.values()) - sum(c for _, c in known):,} in names called 10 times or fewer):")
     for name, n in known:
         print(f"  {name:16}{n:>8,}")
-    print(f"\nGate verdicts: " + ", ".join(f"{v} {n:,}" for v, n in verdicts.most_common()))
+    print("\nGate verdicts: " + ", ".join(f"{v} {n:,}" for v, n in verdicts.most_common()))
     if kinds:
         print("Trace events: " + ", ".join(f"{k} {n:,}" for k, n in kinds.most_common(8)))
 

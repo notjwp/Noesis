@@ -128,7 +128,7 @@ def is_command(text: str) -> str:
     """
     if not text.startswith("/"):
         return ""
-    word = text.split()[0].lower()
+    word = text.split(maxsplit=1)[0].lower()
     if "/" in word[1:]:
         return ""                     # a path, and paths are not commands
     return word

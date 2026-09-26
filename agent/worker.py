@@ -440,7 +440,7 @@ def parse_cron(expr: str) -> list[set[int]]:
     parts = expr.split()
     if len(parts) != 5:
         raise ValueError(f"a cron expression has five fields, got {len(parts)}: {expr!r}")
-    return [_field(p, low, high) for p, (low, high) in zip(parts, FIELDS)]
+    return [_field(p, low, high) for p, (low, high) in zip(parts, FIELDS, strict=True)]
 
 
 def next_run(expr: str, after: float) -> float:

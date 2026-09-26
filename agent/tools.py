@@ -16,12 +16,9 @@ Adding a tool touches this file only (NFR-601).
 """
 import atexit
 import difflib
-import html
 import ipaddress
-import json
 import os
 import re
-import shutil
 import signal
 import subprocess
 import threading

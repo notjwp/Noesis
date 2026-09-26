@@ -1554,7 +1554,7 @@ def check_provider() -> int:
         print("verdict  : USABLE")
         return COMPLETED
 
-    print(f"tool call: NONE - the model replied with text instead", file=sys.stderr)
+    print("tool call: NONE - the model replied with text instead", file=sys.stderr)
     print(f"           {text[:200]!r}", file=sys.stderr)
     if "<tool_call>" in text or "function" in text.lower():
         print("           it looks like a call leaked into the text; this model "

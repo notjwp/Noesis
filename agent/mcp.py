@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import asyncio
 import atexit
-import json
 import threading
 from contextlib import AsyncExitStack
 

@@ -28,7 +28,7 @@ from langgraph.types import RunnableConfig, interrupt
 from agent import config as settings
 from agent import memory, skills
 from agent.context import boundaries, compact_messages, context_chars, shrink
-from agent.policy import classify, risk_of
+from agent.policy import classify
 from agent.provider import call_model
 from agent import registry
 from agent.tools import toolset
@@ -905,7 +905,7 @@ def _last_three_signatures_identical(messages: list[dict]) -> bool:
              for m in messages if m.get("role") == "assistant"]
     names = [[c["name"] for c in _tool_calls(m)]
              for m in messages if m.get("role") == "assistant"]
-    names = [n for n, t in zip(names, turns) if t]
+    names = [n for n, t in zip(names, turns, strict=True) if t]
     turns = [t for t in turns if t]
     if len(turns) < 3:
         return False
