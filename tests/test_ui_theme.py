@@ -208,17 +208,61 @@ def test_opaque_paints_every_cell():
     drive(app, script)
 
 
-def test_bare_keeps_the_chrome_painted_even_so():
-    """An approval prompt must never be hard to read over someone's wallpaper,
-    so the status bar and composer are painted in all three modes."""
+def test_bare_paints_no_surface_at_all():
+    """CHANGED 2026-09-25. It used to assert the opposite - "the status bar and
+    composer are painted in all three modes" - so that an approval prompt could
+    never be hard to read over a wallpaper. Asked for and decided otherwise: the
+    theme is carried by borders and text, and a dialog's border is what marks it.
+
+    The CARET is the one cell still painted, because Textual draws it as a
+    background block and transparent means no caret at all.
+    """
     app = Host(mode="bare")
 
     async def script(pilot):
-        seen = backgrounds(app)
-        assert "default" in seen
-        assert seen - {"default"}, "the status bar lost its background"
+        one = app.current_theme
+        fills = {one.background, one.surface, one.panel}
+        painted = {value for value in backgrounds(app) if value != "default"}
+
+        assert "default" in backgrounds(app)
+        assert not (painted & fills), f"a surface is still filled: {painted & fills}"
 
     drive(app, script)
+
+
+def test_the_caret_survives_bare_because_nothing_else_marks_it():
+    """The single exception, asserted so it cannot be tidied away later."""
+    app = Host(mode="bare")
+
+    async def script(pilot):
+        rules = theme.STYLESHEET.read_text(encoding="utf-8")
+        cursor = rules.split("Input > .input--cursor")[1].split("}")[0]
+        assert "$accent" in cursor and "transparent" not in cursor
+
+    drive(app, script)
+
+
+def test_selection_is_still_visible_when_its_background_goes():
+    """It was a fill plus body text. With no fill, the accent has to carry it or
+    a selected row is indistinguishable from the rest."""
+    rules = theme.STYLESHEET.read_text(encoding="utf-8")
+    bare = [block for block in rules.split("}")
+            if "Screen.-bare .row--selected" in block]
+
+    assert bare, "no bare rule for .row--selected"
+    assert any("$accent" in block for block in bare)
+
+
+def test_the_destructive_button_keeps_its_hue_as_text_in_bare():
+    """`Button.-error` was $error as a FILL. Losing the fill must not lose the
+    one saturated colour a destructive action gets - theme.py calls that a
+    safety property, not a style choice."""
+    rules = theme.STYLESHEET.read_text(encoding="utf-8")
+    bare = [block for block in rules.split("}")
+            if "Screen.-bare Button.-error" in block]
+
+    assert bare, "no bare rule for Button.-error"
+    assert any("color: $error" in block for block in bare)
 
 
 def test_an_explicit_colour_survives_ansi_color():
@@ -286,10 +330,14 @@ def test_assigning_the_theme_directly_is_what_breaks_it():
     drive(app, script)
 
 
-def test_bare_promotes_muted_body_text_but_not_muted_chrome():
-    """Section 10.3, and it is a real mitigation rather than a note: $muted over
-    a busy wallpaper is unreadable and cannot be fixed from inside the app. The
-    chrome keeps $muted because the chrome stays painted."""
+def test_bare_promotes_every_muted_role_now_that_nothing_is_painted():
+    """Section 10.3's mitigation, and it is real rather than a note: $muted over
+    a busy wallpaper is unreadable and cannot be fixed from inside the app.
+
+    CHANGED 2026-09-25, 10.2/10.3 AMENDED. The chrome used to keep $muted
+    BECAUSE the chrome stayed painted; it no longer stays painted, so the reason
+    to exempt it is gone and it is promoted with the body text.
+    """
     painted, wallpaper = Host(mode="gaps"), Host(mode="bare")
     seen = {}
 
@@ -304,5 +352,5 @@ def test_bare_promotes_muted_body_text_but_not_muted_chrome():
     muted = theme.MONO.variables["muted"].lower()
     body = theme.MONO.foreground.lower()
 
-    assert seen["gaps"] == (muted, muted)
-    assert seen["bare"] == (body, muted), "body was not promoted, or chrome was"
+    assert seen["gaps"] == (muted, muted), "a painted mode promoted something"
+    assert seen["bare"] == (body, body), "a muted role was left unreadable"

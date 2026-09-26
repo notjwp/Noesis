@@ -96,7 +96,8 @@ NAMES = tuple(theme.name for theme in THEMES)
 
 # opaque: every cell painted, which is what survives SSH and a screenshot.
 # gaps:   screen bare, pane interiors painted - wallpaper in the gutters only.
-# bare:   screen and panes both bare; chrome stays painted regardless.
+# bare:   NOTHING painted, since 2026-09-25 - borders and text carry the theme.
+#         The Input caret is the single exception; see noesis.tcss.
 MODES = ("opaque", "gaps", "bare")
 
 
@@ -121,7 +122,8 @@ def rich_styles(one: Theme, mode: str = "gaps") -> dict[str, str]:
 
     In `bare` the muted role is promoted here for the same reason the
     stylesheet promotes it: over a wallpaper it cannot be read, and the
-    transcript is body text.
+    transcript is body text. `bare` paints nothing at all, so there is never a
+    fill under it to rescue the contrast.
     """
     return {
         "row--muted": one.foreground if mode == "bare" else one.variables["muted"],

@@ -600,11 +600,34 @@ def test_ctrl_p_opens_the_command_palette():
     drive(app, script)
 
 
-@pytest.mark.parametrize("mode", theme.MODES)
-def test_the_chrome_stays_painted_in_every_mode(mode):
+def _unpainted_chrome(app) -> dict[str, int]:
+    """Unpainted cells on the composer row and the status row.
+
+    EVERY cell, not any: the Input's cursor is painted on its own, so "something
+    on this row has a background" passes on a bare bar.
+    """
+    counts = {}
+
+    async def script(pilot):
+        strips = app.screen._compositor.render_strips()
+        for name in ("#composer", "#status"):
+            row = app.screen.query_one(name).region.y
+            counts[name] = sum(
+                len(segment.text) for segment in strips[row]
+                if not segment.style or segment.style.bgcolor is None
+                or segment.style.bgcolor.name == "default")
+
+    drive(app, script)
+    return counts
+
+
+@pytest.mark.parametrize("mode", ("opaque", "gaps"))
+def test_the_chrome_stays_painted_in_the_painted_modes(mode):
     """Section 10.3: the composer and the status bar must never be hard to read
-    over someone's wallpaper. FR-702's step lives in that bar, so the bar losing
-    its background takes the requirement with it.
+    over someone's wallpaper. FR-702's step lives in that bar.
+
+    NARROWED 2026-09-25 from all three modes to these two - 10.2/10.3 AMENDED,
+    `bare` now paints nothing and the case below is the other half of that.
 
     Checked on the WORKSPACE and not a stand-in: the phase-3 theme test uses its
     own host, so making the real chrome transparent passed it.
@@ -612,18 +635,19 @@ def test_the_chrome_stays_painted_in_every_mode(mode):
     app = workspace()
     app.mode = mode
 
-    async def script(pilot):
-        strips = app.screen._compositor.render_strips()
-        for name in ("#composer", "#status"):
-            row = app.screen.query_one(name).region.y
-            # EVERY cell, not any: the Input's cursor is painted on its own, so
-            # "something on this row has a background" passes on a bare bar.
-            bare = sum(len(segment.text) for segment in strips[row]
-                       if not segment.style or segment.style.bgcolor is None
-                       or segment.style.bgcolor.name == "default")
-            assert bare == 0, f"{mode}: {name} has {bare} unpainted cells"
+    for name, unpainted in _unpainted_chrome(app).items():
+        assert unpainted == 0, f"{mode}: {name} has {unpainted} unpainted cells"
 
-    drive(app, script)
+
+def test_bare_leaves_the_chrome_unpainted_on_the_real_workspace():
+    """The other half, and on the workspace for the reason above: the theme
+    test's own host does not prove anything about the real chrome."""
+    app = workspace()
+    app.mode = "bare"
+
+    counts = _unpainted_chrome(app)
+    assert counts["#status"] > 0, "the status bar is still painted in bare"
+    assert counts["#composer"] > 0, "the composer is still painted in bare"
 
 
 def live_timers(node) -> list:

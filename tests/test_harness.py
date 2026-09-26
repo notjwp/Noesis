@@ -1177,3 +1177,76 @@ def test_scripted_answers_reach_the_ask_hook(monkeypatch, tmp_path):
     monkeypatch.setattr(tools, "ASK", answer)
     assert tools.TOOLS["ask_user"]["fn"]("which environment?") == "gamma"
     assert trace and trace[0]["answer"] == "gamma"
+
+
+# ------------------------------------------------- eval/audit.py, the evidence
+#
+# Built 2026-09-25. The attribution is the whole point of the module, so it is
+# what these cover: a bucket that names the wrong cause is worse than no bucket,
+# because it reads like evidence.
+
+
+def _audit():
+    """Loaded by path, like harness above: eval/ is not a package."""
+    path = pathlib.Path(harness.__file__).resolve().parent / "audit.py"
+    spec = importlib.util.spec_from_file_location("eval_audit", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _failing(**over):
+    row = {"id": "real-rich", "status": "ok", "pass": False, "verdict": "stuck",
+           "turns": 30, "calls": [], "tampered": 0}
+    row.update(over)
+    return row
+
+
+def test_a_run_that_ended_done_is_not_attributed_to_the_failure_counter():
+    """THE BUG THIS MODULE SHIPPED WITH, caught the day it was written.
+    `failures_after` is the counter's final VALUE, not a cause - 27 of 63 `real`
+    failures carried it at 3 or more while ending `done`, and reading it before
+    the verdict attributed every one of them to an exit they never took."""
+    audit = _audit()
+    row = _failing(verdict="done", failures_after=5)
+
+    assert audit.bucket(row) == "ended `done` with the check still failing"
+
+
+def test_a_stuck_run_with_three_failing_turns_is_attributed_to_them():
+    audit = _audit()
+
+    assert audit.bucket(_failing(failures_after=3)).startswith("stuck: three")
+
+
+def test_a_budget_exit_is_named_not_folded_into_stuck():
+    """51% of every recorded `real` failure ended `budget` or `compact`, on a cap
+    removed 2026-09-23. Folding those into `stuck` would hide that the split's
+    history cannot speak for the current code."""
+    audit = _audit()
+
+    assert audit.bucket(_failing(verdict="budget")) == "ended `budget`"
+    assert audit.bucket(_failing(verdict="compact")) == "ended `compact`"
+
+
+def test_a_run_with_no_verdict_says_so_rather_than_guessing():
+    audit = _audit()
+
+    assert audit.bucket(_failing(verdict=None)) == "no verdict recorded"
+
+
+def test_tamper_does_not_compete_with_the_terminal_cause():
+    """It is a wasted-turns signal, not a way for a run to end, so it is counted
+    beside the buckets rather than stealing a row from one."""
+    audit = _audit()
+    row = _failing(verdict="done", tampered=2)
+
+    assert audit.bucket(row) == "ended `done` with the check still failing"
+
+
+def test_a_stuck_run_that_wrote_nothing_is_distinguished():
+    audit = _audit()
+    wrote = _failing(calls=[{"tool": "edit_file"}])
+
+    assert "written nothing" in audit.bucket(_failing())
+    assert "written nothing" not in audit.bucket(wrote)

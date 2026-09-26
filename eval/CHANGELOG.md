@@ -5,6 +5,189 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## A Windows Terminal profile, generated (2026-09-26)
+
+**No agent code touched, no eval** - the TUI and the wizard are on no split.
+Verified on Windows by installing it and diffing the file it must not touch.
+
+`bare` paints nothing now, so the interface is as transparent as an app can make
+itself and the window still shows the terminal's own background. That is §10.4,
+"the emulator half", handled until now by printing a hint.
+
+**The obvious version of this was investigated and rejected.** Having NOESIS
+toggle the terminal transparent on launch and restore it on exit cannot be made
+safe: `opacity` belongs to the Windows Terminal PROFILE, not the window, so it
+would leak to every other tab on that profile - and the restore only runs for
+exits NOESIS sees. A kill, a closed tab or a crash would leave the user's
+`settings.json` modified. The Win32 `SetLayeredWindowAttributes` route is dead
+here too: under Windows Terminal `GetConsoleWindow()` returns a hidden
+pseudo-console window, not the visible one.
+
+A hypothesis worth recording because it was REFUTED: CPython's `os.kill` on
+Windows is built over `TerminateProcess`, so `os.kill(pid, 0)` might have killed
+a live process rather than probing it. Tested against a child: it survived. (That
+was yesterday's `_alive` work; the same probe habit settled this one.)
+
+**A fragment instead.** Windows Terminal has a supported extension point -
+[JSON fragment extensions](https://learn.microsoft.com/en-us/windows/terminal/json-fragment-extensions) -
+where an app drops a `.json` under
+`%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\Noesis\` and Terminal
+merges it. **The user's settings.json is never opened.** Install is one file;
+remove deletes it. Opening that tab IS opening NOESIS, already transparent, so
+nothing is mutated per run and there is nothing to restore.
+
+**The GUID is the part worth testing.** Terminal derives a fragment profile's
+GUID as two nested v5 UUIDs over the namespace
+`{f65ddb7e-706b-4499-8a50-40313caf510a}`, then the app name, then the profile
+name, each encoded UTF-16LE and decoded ASCII. Getting it right is what makes a
+reinstall UPDATE the profile rather than stack a second one. The docs publish a
+worked example - app `Git`, profile `Git Bash` ->
+`{2ece5bfe-50ed-5f3a-ab87-5cd4baafed2b}` - which is an **oracle we did not
+write**, so that is the test. Drop the app-name nesting and it goes red.
+
+`--terminal-profile blurred|clear|remove`, asking when not told, because the two
+looks differ more than a default should decide: acrylic is the more readable over
+a busy wallpaper, and goes OPAQUE when the window is unfocused unless a global
+Terminal setting says otherwise; clear stays transparent unfocused and is Windows
+11 only. No TTY means no prompt and exit 2 naming both, the same rule that stops a
+scheduled task hanging on the setup wizard.
+
+**The wizard now asks instead of hinting.** `_save()` used to print
+`OPACITY_HINT` and exit in the same breath, which is a line nobody acts on. It
+offers three buttons at that moment, and skips the offer entirely where
+`fragment_path()` is None.
+
+**The container caught a real trap.** The first tests set `setup.os.name` to
+`"nt"` - and `pathlib` reads `os.name` to decide whether a `Path` is a
+`WindowsPath`, so the suite raised `cannot instantiate 'WindowsPath' on your
+system`. The same "a fixture that stubs a builtin stubs it for EVERYTHING" lesson
+that the `time.sleep` autouse fixture paid for. Fixed by naming the predicate,
+`setup._windows()`, and patching that.
+
+Verified on Windows: installed, and the user's settings.json MD5 is identical
+before and after. Removed, and removing again says so rather than failing.
+Installed twice - one file, one profile.
+
+**This also closes a gap §10.4 asked for**: the emulator note was to appear "in
+the wizard's final screen AND in `--help`", and it was only in the wizard. A flag
+is in `--help` by definition.
+
+1,253 -> 1,269 tests. Two mutations: drop the app-name nesting from the GUID and
+the oracle goes red; write the fragment as UTF-16 - the failure the docs
+specifically warn about - and two go red.
+
+## `bare` paints nothing (2026-09-25)
+
+**A look, asked for, and an amendment to §10.2/§10.3 rather than a quiet
+reinterpretation of them.** No agent code touched; no eval - the TUI is on no
+split.
+
+`bare` made the screen and pane interiors transparent and left the composer,
+status bar, scrollbars, selected rows, dialogs and buttons filled, which reads as
+half-finished rather than transparent. Now nothing is painted and the theme is
+carried entirely by borders and text.
+
+**It contradicted a requirement, and that is recorded, not papered over.**
+NOESIS_BUILD_PROMPT.md §10.2 defined `bare` as "Only the composer, status bar,
+modals and selected rows stay painted", and §10.3 listed two mitigations as
+"both required", the second being "Modals, the composer and the status bar are
+painted in all three modes. An approval prompt must never be hard to read."
+Three tests pinned it. Both sections now carry a dated AMENDED note; the second
+mitigation holds in `opaque` and `gaps` only.
+
+What answers the readability worry is that every dialog ALREADY has a border and
+those are load-bearing now: thick `$error` for an approval, thick `$accent` for a
+question, round `$border` for the wizard, round `$accent` for a focused pane.
+
+**Three cues were carried by a fill and needed replacing** - this was the work,
+not the transparency:
+
+| cue | was | now, in `bare` |
+|---|---|---|
+| a selected row | `background: $surface` | `color: $accent` |
+| a destructive button | `background: $error` | `color: $error`, bold |
+| muted chrome text | `$muted` on a fill | promoted to `$foreground` |
+
+The stylesheet had promised "background plus a marker" for selection and there is
+no marker - `panes.py` has no glyph - so the accent is it. A focused Button
+needed nothing: it already said `color: $accent` and bold, and a border on a
+`height: 1` button would have broken the layout.
+
+**One cell still paints: the Input caret.** Textual draws it as a background
+block, so transparent means no caret at all - a broken input rather than a look.
+A test asserts it survives, so it cannot be tidied away later.
+
+**Where the tests had to differ.** The theme suite's own `Host` does not contain
+the real chrome, and the screens suite already carried a comment saying so -
+"making the real chrome transparent passed it". So the chrome assertion lives in
+`test_ui_screens.py` against a real workspace, and the mutation confirms it:
+restore the composer and status fills and only that test goes red.
+
+1,250 -> 1,253 tests. `agent/ui/noesis.tcss` and `agent/ui/theme.py`'s MODES
+comment; no colour written outside theme.py, so the no-hardcoded-hex test is
+untouched.
+
+**NOESIS can only stop painting cells.** Whether a wallpaper shows through is the
+emulator's own setting - §10.4's note, which the wizard prints
+(`agent/setup.py:51`) and which `bare` now rests on entirely. In an opaque
+terminal `bare` shows the terminal's background colour, not a wallpaper, and that
+is the terminal's setting rather than a defect here. §10.4 also asks for that
+note in `--help`, which it is not in; pre-existing, and left alone.
+
+## eval/audit.py, and what the real split was actually failing on (2026-09-25)
+
+**No agent code changed.** A reading tool, and the reading it was built for.
+
+**Why it exists.** The requirement audit earlier the same day swept 1,492 traces
+through a dozen throwaway scripts in a temp directory, and found two defects that
+seven passing tests and a Linux container had both missed. That sweep should not
+have to be rewritten each time, so it is `eval/audit.py`: pass rate and cost per
+split, how failing runs ENDED, which mechanisms fired, `--split`, `--since`,
+`--cases`. No model, no network, no quota - the same grounds §12 already accepts
+for `measure_recall.py`.
+
+**It shipped with a bug and the bug is the lesson.** The first `bucket()` read
+`failures_after >= 3` BEFORE the terminal verdict, and reported that 47% of
+`real` failures ended on three consecutive failing turns. They did not. 27 of
+those 63 rows ended **`done`** - `failures_after` is the counter's final VALUE,
+not a cause, and reading it first invented an exit those runs never took. Found by
+pulling the last three tool results of the 63 and seeing successful file reads
+where errors should have been. The fix keys on the verdict, tamper is counted
+beside the buckets rather than competing with them, and a row whose cause is not
+on the record is `unattributed`. A test pins it; putting the counter back first
+turns it red.
+
+**What the corrected reading says, and it retires a standing narrative.**
+
+| | |
+|---|---|
+| last real pass (09-19), 22 failures | **21 ended `budget`** |
+| `real-rich` that pass | 0/8, `budget` x8 |
+| `real-humanize` that pass | 1/9, `budget` x9 |
+| all 225 recorded real rows | `budget` + `compact` = **51% of every failure** |
+| `real-rich`, all time | 9/38, and **26 of its 29 failures are cap exits** |
+| real rows on the CURRENT code | **zero** |
+
+`BUDGET_TOKENS` was removed on 2026-09-23 (NFR-401 amended). So the split's whole
+recorded history is dominated by a mechanism that no longer exists, and
+"`rich` 0/3 four passes running, `humanize` 0/3" - written up as a capability
+limit - is mostly the cap. CLAUDE.md's real row now says so.
+
+**This does not mean those cases will pass.** It means their failures were never
+measured as wrong ANSWERS, so the next pass is the first honest look. `humanize`
+is the more mixed of the two: 19 `budget` but also 17 `stuck` and 16 `done` across
+59 rows, so something besides the cap is there. `rich` is almost purely cap-bound.
+
+The real split also costs **250,432 tokens at the median**, five times any other
+split - which is why one pass is a day's quota.
+
+**No fix shipped from this**, deliberately: a diagnosis whose evidence is 51%
+obsolete cannot pick a change. The next scored pass is the prerequisite, and it
+now has a pre-registered expectation - `rich` and `humanize` should move, and if
+they do not, THEN the capability reading is earned.
+
+1,244 -> 1,250 tests. Deleted alongside: `.agent/run_when_back.sh`.
+
 ## NFR-302 on Windows: a dead worker looked alive forever (2026-09-25)
 
 **Found by the requirement audit the same morning, fixed the same day.** No eval:

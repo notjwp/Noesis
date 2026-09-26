@@ -368,6 +368,14 @@ def diagnose() -> list[str]:
     except Exception as exc:
         lines.append(f"FAIL  {exc}")
 
+    from agent import setup
+
+    if setup.fragment_path() is not None:
+        lines.append(f"ok    windows terminal profile {setup.PROFILE_NAME}"
+                     if setup.installed() else
+                     "--    no windows terminal profile "
+                     "(noesis --terminal-profile)")
+
     if configured():
         lines.extend(check())
     else:

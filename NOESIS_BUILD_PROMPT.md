@@ -554,8 +554,12 @@ opaque   every cell painted. Safe over SSH, in screenshots, and in terminals
 gaps     DEFAULT. Screen background bare; pane interiors painted $surface.
          Wallpaper shows in the 1-cell gutters and the screen margin — the
          Hyprland gap look — while all text sits on a solid ground.
-bare     Screen and pane interiors both bare. Only the composer, status bar,
-         modals and selected rows stay painted.
+bare     Nothing painted at all - borders and text carry the theme. The Input
+         caret is the single exception, because textual draws it as a
+         background block and transparent means no caret.
+         AMENDED 2026-09-25. It read "Screen and pane interiors both bare. Only
+         the composer, status bar, modals and selected rows stay painted", which
+         looked half-finished rather than transparent.
 ```
 
 Implement as a CSS class on the root (`-opaque` / `-gaps` / `-bare`), not as three stylesheets.
@@ -567,8 +571,13 @@ from inside the app. Two mitigations, both required:
 
 - In `bare`, `$muted` is promoted to `$foreground` for body text; it stays `$muted` only inside
   painted chrome.
-- Modals, the composer and the status bar are painted in **all three** modes. An approval prompt
-  must never be hard to read.
+- ~~Modals, the composer and the status bar are painted in **all three** modes. An approval
+  prompt must never be hard to read.~~ **AMENDED 2026-09-25**, on request: in `bare` nothing is
+  painted, so this holds in `opaque` and `gaps` only. What carries a dialog there is its BORDER,
+  which every one already has - thick `$error` for an approval, thick `$accent` for a question.
+  The first mitigation above is unchanged and now covers the chrome too, since there is no longer
+  a fill under it to keep `$muted` readable. §10.4's emulator note is what `bare` now rests on
+  entirely.
 
 ### 10.4 The emulator half
 

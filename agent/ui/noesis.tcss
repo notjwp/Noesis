@@ -30,14 +30,74 @@ Screen.-gaps, Screen.-bare {
 }
 
 /* $muted over a busy wallpaper is hard to read and that cannot be fixed from
-   inside the app, so in `bare` the muted BODY text is promoted. Naming the
-   classes is the point: `Screen.-bare { color: $foreground }` inherits from a
-   rule that already said so and promotes nothing. Chrome is excluded because it
-   stays painted in all three modes, where $muted is still readable. */
+   inside the app, so in `bare` every muted role is promoted - the chrome
+   included, since 2026-09-25, because nothing is painted under it any more.
+   Naming the classes is the point: `Screen.-bare { color: $foreground }`
+   inherits from a rule that already said so and promotes nothing. */
 Screen.-bare .row--muted,
 Screen.-bare Pane > .pane--title,
-Screen.-bare Pane > .pane--count {
+Screen.-bare Pane > .pane--count,
+Screen.-bare #status,
+Screen.-bare #status .status--hint,
+Screen.-bare .hint,
+Screen.-bare #key-shown,
+Screen.-bare .row--empty {
     color: $foreground;
+}
+
+/* --- `bare`: nothing painted, anywhere ------------------------------------
+
+   Every surface the two other modes fill. The list is here rather than beside
+   each component so the invariant is checkable in one place, which is what the
+   test asserts: in `bare` no cell carries $background, $surface or $panel.
+
+   The CARET is the one exception, below. */
+Screen.-bare #composer,
+Screen.-bare #status,
+Screen.-bare #landing-input,
+Screen.-bare #approval,
+Screen.-bare #plan,
+Screen.-bare #setup,
+Screen.-bare #choices,
+Screen.-bare #base-url,
+Screen.-bare #model-id,
+Screen.-bare #key,
+Screen.-bare #ask,
+Screen.-bare #ask-answer,
+Screen.-bare Button,
+Screen.-bare Button:focus,
+Screen.-bare Button.-error,
+Screen.-bare .row--selected,
+Screen.-bare Input > .input--selection {
+    background: transparent;
+}
+
+/* Scrollbars, which are read from the SCROLLABLE widget and not inherited, so
+   both the Screen and the widgets need saying. The bar itself keeps its colour:
+   a scrollbar with no trough and no bar is not a scrollbar. */
+Screen.-bare,
+Screen.-bare Pane, Screen.-bare RichLog, Screen.-bare DataTable {
+    scrollbar-background: transparent;
+    scrollbar-background-hover: transparent;
+    scrollbar-background-active: transparent;
+    scrollbar-corner-color: transparent;
+}
+
+/* Three cues that were carried by a fill and now are not. Selection was a
+   background plus body text; a focused Button already said accent and bold, so
+   only its fill goes; the destructive Button loses $error as a fill and takes
+   it as text, because that hue is a safety property (see theme.py). */
+Screen.-bare .row--selected {
+    color: $accent;
+}
+
+Screen.-bare Button.-error {
+    color: $error;
+    text-style: bold;
+}
+
+Screen.-bare Input > .input--selection {
+    color: $accent;
 }
 
 /* --- panes ---------------------------------------------------------------- */
@@ -59,7 +119,8 @@ Pane:focus, Pane:focus-within {
     border: round $accent;
 }
 
-/* In `bare` the interiors go too, and only the gutters and chrome remain. */
+/* In `bare` the interiors go too. The focus BORDER is what marks a pane once
+   the fill is gone, and it was already doing that job above. */
 Screen.-bare Pane {
     background: transparent;
 }
@@ -120,7 +181,8 @@ Pane > .pane--count {
 /* --- rows and selection ---------------------------------------------------
 
    Never `reverse`: it inverts unreadably in half the palettes and is illegible
-   in the transparent modes. Background plus a marker instead. */
+   in the transparent modes. A background here, and in `bare` - where there is
+   no background to give - the accent as text. */
 
 .row--selected {
     background: $surface;
@@ -154,7 +216,9 @@ Pane > .pane--count {
 
 /* --- modals ---------------------------------------------------------------
 
-   Painted in all three modes, for the same reason as the chrome. */
+   Filled in `opaque` and `gaps`; in `bare` the BORDER carries them, which is
+   why every dialog below has one - thick $error for an approval, thick $accent
+   for a question, round $border for the wizard. */
 
 ApprovalScreen, PlanScreen {
     align: center middle;
@@ -332,7 +396,11 @@ Pane, RichLog, DataTable {
 }
 
 /* An Input's cursor and placeholder default to `reverse`, which under
-   ansi_color=True is a 16-colour ANSI cell rather than a palette colour. */
+   ansi_color=True is a 16-colour ANSI cell rather than a palette colour.
+
+   THE CARET IS THE ONE CELL `bare` STILL PAINTS. Textual draws it as a
+   background block, so transparent means no caret at all - a broken input
+   rather than a look. */
 Input > .input--cursor {
     background: $accent;
     color: $background;
@@ -410,12 +478,12 @@ SetupScreen {
     height: auto;
 }
 
-#after {
+#after, #look {
     height: auto;
     margin-top: 1;
 }
 
-#after Button {
+#after Button, #look Button {
     margin-right: 1;
 }
 

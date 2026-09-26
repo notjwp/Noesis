@@ -11,6 +11,7 @@ the probe's own classification is exercised through the real taxonomy in
 """
 import asyncio
 import importlib
+import json
 import os
 import pathlib
 import subprocess
@@ -712,3 +713,130 @@ def test_the_wizard_does_not_import_the_workspace():
         cwd=pathlib.Path(__file__).resolve().parent.parent,
         capture_output=True, text=True)
     assert done.returncode == 0, done.stderr
+
+
+# ------------------------------------ the Windows Terminal profile (§10.4)
+#
+# A FRAGMENT, never an edit to the user's settings.json. That is the property
+# worth protecting: installing writes one file of our own and removing deletes
+# it, so nothing we do can damage a file the user owns.
+
+
+def test_the_guid_matches_microsofts_own_worked_example():
+    """The one test that proves the algorithm instead of restating it.
+
+    The fragment docs publish a worked example - app `Git`, profile `Git Bash`
+    -> {2ece5bfe-50ed-5f3a-ab87-5cd4baafed2b} - which is an oracle we did not
+    write. Get the UTF-16LE encoding dance wrong and this fails.
+    """
+    assert setup.profile_guid("Git", "Git Bash") == \
+        "{2ece5bfe-50ed-5f3a-ab87-5cd4baafed2b}"
+
+
+def test_the_guid_is_stable_so_reinstalling_updates_one_profile():
+    """Terminal keys a fragment profile by GUID. A fresh one each time would
+    stack duplicates in the dropdown."""
+    assert setup.profile_guid() == setup.profile_guid()
+    assert setup.profile_guid().startswith("{") and setup.profile_guid().endswith("}")
+
+
+def test_the_fragment_carries_the_look_that_was_asked_for():
+    assert setup.fragment(blurred=True)["profiles"][0]["useAcrylic"] is True
+    assert setup.fragment(blurred=False)["profiles"][0]["useAcrylic"] is False
+    assert setup.fragment(blurred=False)["profiles"][0]["opacity"] == 85
+
+
+def test_the_fragment_defines_a_name_which_is_the_documented_minimum():
+    """"For new profiles added through fragments, the new profile must define a
+    name for itself." Everything else is optional; this is not."""
+    assert setup.fragment(blurred=False)["profiles"][0]["name"]
+
+
+def test_the_launch_command_is_quoted_only_when_it_has_to_be(monkeypatch):
+    monkeypatch.setattr(setup.shutil, "which", lambda name: r"C:\Tools\noesis.exe")
+    assert setup.launch_command() == r"C:\Tools\noesis.exe"
+
+    monkeypatch.setattr(setup.shutil, "which", lambda name: r"C:\Program Files\noesis.exe")
+    assert setup.launch_command() == r'"C:\Program Files\noesis.exe"'
+
+
+def test_a_source_checkout_with_no_installed_script_still_gets_a_profile():
+    """`noesis` is only on PATH after an install. Falling back to -m agent means
+    the profile works for someone running from the repo."""
+    import agent.setup as module
+
+    original, module.shutil.which = module.shutil.which, lambda name: None
+    try:
+        assert "-m agent" in setup.launch_command()
+    finally:
+        module.shutil.which = original
+
+
+def test_there_is_nowhere_to_put_a_fragment_off_windows(monkeypatch):
+    """The container is Linux, so this is the path the suite mostly runs."""
+    monkeypatch.setattr(setup, "_windows", lambda: False)
+
+    assert setup.fragment_path() is None
+    assert setup.installed() is False
+    assert setup.remove_profile() is False
+
+
+def test_installing_off_windows_refuses_rather_than_writing_somewhere_odd(monkeypatch):
+    monkeypatch.setattr(setup, "_windows", lambda: False)
+
+    with pytest.raises(RuntimeError):
+        setup.install_profile(blurred=False)
+
+
+def _as_windows(monkeypatch, tmp_path):
+    """Patch the PREDICATE, never `os.name`: pathlib reads os.name to pick
+    WindowsPath, so stubbing it builds paths the host cannot instantiate."""
+    monkeypatch.setattr(setup, "_windows", lambda: True)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+
+def test_the_fragment_goes_where_terminal_reads_them(monkeypatch, tmp_path):
+    """Under LOCALAPPDATA, and NOT the Packages folder that holds the user's own
+    settings.json - that file is never touched."""
+    _as_windows(monkeypatch, tmp_path)
+
+    path = setup.fragment_path()
+    assert path.parent.parent.name == "Fragments"
+    assert path.suffix == ".json"
+    assert "Packages" not in str(path)
+
+
+def test_installing_creates_the_folder_and_writes_utf8(monkeypatch, tmp_path):
+    """The docs name UTF-16LE as the way this silently fails, so the encoding is
+    asserted on the BYTES rather than trusted."""
+    _as_windows(monkeypatch, tmp_path)
+
+    path = setup.install_profile(blurred=True)
+
+    assert path.is_file()
+    raw = path.read_bytes()
+    assert b"\x00" not in raw, "written as UTF-16, which Terminal cannot read"
+    written = json.loads(raw.decode("utf-8"))
+    assert written["profiles"][0]["useAcrylic"] is True
+    assert setup.installed() is True
+
+
+def test_installing_twice_leaves_one_file_and_one_profile(monkeypatch, tmp_path):
+    _as_windows(monkeypatch, tmp_path)
+
+    setup.install_profile(blurred=True)
+    path = setup.install_profile(blurred=False)
+
+    assert len(list(path.parent.iterdir())) == 1
+    written = json.loads(path.read_text(encoding="utf-8"))
+    assert len(written["profiles"]) == 1
+    assert written["profiles"][0]["useAcrylic"] is False, "the second answer won"
+
+
+def test_removing_deletes_it_and_says_so_only_once(monkeypatch, tmp_path):
+    _as_windows(monkeypatch, tmp_path)
+    setup.install_profile(blurred=False)
+
+    assert setup.remove_profile() is True
+    assert setup.installed() is False
+    assert setup.remove_profile() is False, "nothing to remove is not a failure"

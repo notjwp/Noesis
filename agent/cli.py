@@ -443,6 +443,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="listen on email; queues messages and answers them")
     parser.add_argument("--cancel", metavar="TASK_ID",
                         help="stop a queued or running task")
+    parser.add_argument("--terminal-profile", nargs="?", const="", default=None,
+                        choices=("blurred", "clear", "remove", ""),
+                        metavar="blurred|clear|remove",
+                        help="add a transparent NOESIS profile to Windows "
+                             "Terminal, or remove it; asks which if not given")
     parser.add_argument("--doctor", action="store_true",
                         help="check every precondition; changes nothing")
     parser.add_argument("--update", action="store_true",
@@ -510,6 +515,62 @@ def main(argv: list[str] | None = None) -> int:
             pass
         memory.deactivate()
         skills.deactivate()
+
+
+def terminal_profile(choice: str) -> int:
+    """Add, or remove, a transparent NOESIS profile in Windows Terminal.
+
+    A FRAGMENT rather than an edit to the user's settings.json, so this installs
+    one file and removes one file. §10.4 is the reason it exists at all: only the
+    emulator can make a window transparent.
+    """
+    from agent import setup
+
+    if setup.fragment_path() is None:
+        print("Windows Terminal fragments need Windows.\n"
+              f"{setup.OPACITY_HINT}", file=sys.stderr)
+        return 1
+
+    if choice == "remove":
+        if setup.remove_profile():
+            print(f"removed {setup.PROFILE_NAME}. Restart Windows Terminal.")
+            return 0
+        print(f"no {setup.PROFILE_NAME} profile to remove")
+        return 0
+
+    if not choice:
+        if not setup.interactive():
+            print("say which: --terminal-profile blurred, clear, or remove",
+                  file=sys.stderr)
+            return 2
+        choice = _ask_look()
+        if not choice:
+            return 0
+
+    path = setup.install_profile(blurred=choice == "blurred")
+    print(f"wrote {path}\n"
+          f"Restart Windows Terminal, then pick {setup.PROFILE_NAME} from the "
+          f"dropdown.\nYour own settings.json was not touched; remove it with "
+          f"--terminal-profile remove.")
+    return 0
+
+
+def _ask_look() -> str:
+    """blurred, clear, or "" to leave it alone. Asked rather than defaulted,
+    because the two look different enough that neither is the obvious one."""
+    print("  blurred  frosted glass - most readable, but the window goes "
+          "opaque when it loses focus")
+    print("  clear    sharp see-through - stays transparent unfocused, "
+          "Windows 11 only")
+    while True:
+        try:
+            answer = input("  [b]lurred  [c]lear  [s]kip > ").strip().lower()
+        except EOFError:
+            return ""
+        if answer[:1] in ("b", "c"):
+            return "blurred" if answer[0] == "b" else "clear"
+        if answer[:1] in ("s", "q") or not answer:
+            return ""
 
 
 def attach(task_id: str) -> int:
@@ -635,6 +696,9 @@ def _dispatch(args, app, parser) -> int:
         from agent import viewer
 
         return viewer.run()
+
+    if args.terminal_profile is not None:
+        return terminal_profile(args.terminal_profile)
 
     if args.doctor:
         from agent import channel

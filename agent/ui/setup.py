@@ -68,6 +68,10 @@ class SetupScreen(Screen):
                 yield Button("retry", id="retry")
                 yield Button("save anyway", id="save-anyway")
                 yield Button("change model", id="back")
+            with Horizontal(id="look"):
+                yield Button("blurred", id="look-blurred", variant="primary")
+                yield Button("clear", id="look-clear")
+                yield Button("no thanks", id="look-skip")
 
     def _options(self) -> list[Option]:
         out = []
@@ -85,6 +89,7 @@ class SetupScreen(Screen):
         for box in self.query(Input):
             box.cursor_blink = False
         self.query_one("#after").display = False
+        self.query_one("#look").display = False
         # An empty Static still occupies its row, and four blank rows between
         # the list and the key box read as a layout that lost something.
         self.query_one("#key-shown").display = bool(self._existing)
@@ -185,6 +190,20 @@ class SetupScreen(Screen):
         self.query_one("#save-anyway").display = "save-anyway" in self.app.offered
         self._say(f"{outcome}: {message}", "error")
 
+    @on(Button.Pressed, "#look-blurred")
+    @on(Button.Pressed, "#look-clear")
+    @on(Button.Pressed, "#look-skip")
+    def _look(self, event: Button.Pressed) -> None:
+        if event.button.id != "look-skip":
+            try:
+                setup.install_profile(blurred=event.button.id == "look-blurred")
+            except OSError as exc:
+                # Saying so beats a traceback over a wizard already finished:
+                # the KEY is written by now, which is what the wizard is for.
+                self._say(f"could not write the profile: {exc}", "error")
+                return
+        self.app.exit(True)
+
     @on(Button.Pressed, "#save-anyway")
     def _save_anyway(self) -> None:
         self._save()
@@ -205,8 +224,20 @@ class SetupScreen(Screen):
             # over a wizard the person cannot get past.
             self._say(f"could not write .env: {exc}", "error")
             return
-        self._say(f"saved.  key {setup.mask(key)}\n{setup.OPACITY_HINT}", "ok")
-        self.app.exit(True)
+        # §10.4: only the emulator can make the window transparent. Offered
+        # here rather than hinted, because a hint at the end of a wizard is a
+        # line nobody acts on - and asked, because blurred and clear differ.
+        if setup.fragment_path() is None:
+            self._say(f"saved.  key {setup.mask(key)}\n{setup.OPACITY_HINT}", "ok")
+            self.app.exit(True)
+            return
+        self._say(f"saved.  key {setup.mask(key)}\n"
+                  f"add a transparent {setup.PROFILE_NAME} profile to Windows "
+                  f"Terminal?  blurred is more readable; clear stays "
+                  f"transparent unfocused.  Either appears once Terminal "
+                  f"restarts.", "ok")
+        self.query_one("#verify").display = False
+        self.query_one("#look").display = True
 
     def _say(self, text: str, kind: str) -> None:
         # Scrubbed HERE and not only inside probe(): this is the boundary the

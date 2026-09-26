@@ -12,9 +12,12 @@ body, so a machine that reaches `needed() == False` never pays for it
 what gets written, what the key looks like when shown - is reachable without a
 running app.
 """
+import json
 import os
+import shutil
 import sys
 import traceback
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -48,9 +51,9 @@ WARNING = ("changing the model invalidates every baseline in this repo - "
            "it is a different measurement.")
 
 # The app cannot make its own window transparent; only the emulator can.
-OPACITY_HINT = ('Windows Terminal: add "opacity": 85 and "useAcrylic": true to '
-                'the profile. kitty background_opacity, WezTerm '
-                'window_background_opacity, Alacritty opacity.')
+OPACITY_HINT = ("Windows Terminal: `noesis --terminal-profile` adds a "
+                "transparent NOESIS profile. kitty background_opacity, WezTerm "
+                "window_background_opacity, Alacritty opacity.")
 
 
 # ----------------------------------------------------------- when it runs
@@ -227,3 +230,109 @@ def write_env(pairs: dict[str, str], path: Path | None = None) -> None:
     except OSError:
         pass                     # Windows has no mode bits; the write still stands
     os.environ.update(pairs)
+
+
+# ------------------------------------------ the Windows Terminal profile
+
+# A FRAGMENT, not an edit to the user's settings.json: Terminal merges every
+# .json in this folder, so installing is one file and uninstalling is deleting
+# it. https://learn.microsoft.com/en-us/windows/terminal/json-fragment-extensions
+FRAGMENT_NS = uuid.UUID("{f65ddb7e-706b-4499-8a50-40313caf510a}")
+APP_NAME = "Noesis"
+PROFILE_NAME = "NOESIS"
+PROFILE_OPACITY = 85
+
+
+def _windows() -> bool:
+    """Named so a test can answer it without touching `os.name` itself, which
+    pathlib reads to decide whether a Path is a WindowsPath."""
+    return os.name == "nt"
+
+
+def profile_guid(app: str = APP_NAME, profile: str = PROFILE_NAME) -> str:
+    """The GUID Terminal derives for a fragment profile, as the docs define it.
+
+    Two nested v5 UUIDs, each name encoded UTF-16LE and decoded ASCII. Optional
+    but "strongly encouraged": with it, reinstalling UPDATES the profile instead
+    of adding a second one.
+    """
+    def name(text: str) -> str:
+        return text.encode("UTF-16LE").decode("ASCII")
+
+    within = uuid.uuid5(FRAGMENT_NS, name(app))
+    return f"{{{uuid.uuid5(within, name(profile))}}}"
+
+
+def launch_command() -> str:
+    """How to start NOESIS, for a terminal that is not this process.
+
+    The installed script when there is one, else this interpreter and -m, so a
+    source checkout without an entry point still gets a working profile. Quoted
+    only when it has to be: a bare path reads better in the settings UI.
+    """
+    found = shutil.which("noesis")
+    if found:
+        return f'"{found}"' if " " in found else found
+    executable = sys.executable
+    return f'"{executable}" -m agent' if " " in executable else f"{executable} -m agent"
+
+
+def fragment(blurred: bool) -> dict:
+    """The fragment's contents. Pure, so the tests drive this and not the disk.
+
+    `name` is the one property a fragment profile MUST define. No `icon` - we
+    ship no asset, and adjacent-file icons need Terminal 1.24 - and no
+    `startingDirectory`, because NOESIS finds `.env` from its own file and the
+    workspace from config, so the working directory decides nothing.
+    """
+    return {
+        "profiles": [{
+            "guid": profile_guid(),
+            "name": PROFILE_NAME,
+            "commandline": launch_command(),
+            "opacity": PROFILE_OPACITY,
+            "useAcrylic": bool(blurred),
+        }],
+    }
+
+
+def fragment_path() -> Path | None:
+    """Where the fragment belongs, or None where there is nowhere to put one.
+
+    Under LOCALAPPDATA and NOT the Packages folder that holds the user's own
+    settings.json - a per-user fragment for an app installed from the web.
+    """
+    local = os.environ.get("LOCALAPPDATA")
+    if not _windows() or not local:
+        return None
+    return (Path(local) / "Microsoft" / "Windows Terminal" / "Fragments"
+            / APP_NAME / "noesis.json")
+
+
+def installed() -> bool:
+    path = fragment_path()
+    return bool(path and path.is_file())
+
+
+def install_profile(blurred: bool) -> Path:
+    """Write the fragment, creating the folder Terminal reads. Returns the path.
+
+    UTF-8 explicitly: the docs name UTF-16LE as the way this silently fails.
+    """
+    path = fragment_path()
+    if path is None:
+        raise RuntimeError("a Windows Terminal fragment needs Windows and LOCALAPPDATA")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="") as handle:
+        json.dump(fragment(blurred), handle, indent=2)
+        handle.write("\n")
+    return path
+
+
+def remove_profile() -> bool:
+    """Delete the fragment. False when there was nothing to delete."""
+    path = fragment_path()
+    if path is None or not path.is_file():
+        return False
+    path.unlink()
+    return True

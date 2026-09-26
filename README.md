@@ -117,6 +117,9 @@ noesis --resume <id>                           # pick one up
 noesis --submit "Rotate the API keys"          # queue it and come back later
 noesis --worker                                # drain the queue (leave this running)
 noesis --tasks                                 # what is queued / running / done
+noesis --attach <id>                           # watch one as it runs; ctrl-c detaches
+
+noesis --terminal-profile clear                # a transparent NOESIS profile in Windows Terminal
 
 noesis --schedule "0 9 * * 1" "Summarise last week's commits"
 noesis --schedule "0 9 * * *" "@review"        # every morning: what needs attention?
@@ -218,7 +221,7 @@ place Docker is needed.
 ```bash
 docker build -f Containerfile -t personal-agent .
 
-# 1,244 offline tests - no API key, no network
+# 1,269 offline tests - no API key, no network
 docker run --rm --network none --read-only --tmpfs /tmp:exec \
   -v "$PWD:/app:ro" -v "$PWD/eval/workspace:/workspace" \
   -v "$PWD/.agent/homes/_t:/state" personal-agent python -m pytest -q

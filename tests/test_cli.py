@@ -5,6 +5,7 @@ A prompt that reads a mistyped key as approval is a security defect, and the
 only way that surfaces in manual testing is by accident.
 """
 import builtins
+import pathlib
 from types import SimpleNamespace
 
 import pytest
@@ -782,3 +783,48 @@ def test_detaching_leaves_the_task_alone(capsys, monkeypatch):
 
 def _interrupt(_seconds):
     raise KeyboardInterrupt
+
+
+def test_the_terminal_profile_flag_refuses_off_windows(capsys, monkeypatch):
+    from agent import setup
+
+    monkeypatch.setattr(setup, "fragment_path", lambda: None)
+
+    assert cli.terminal_profile("clear") == 1
+    assert "Windows" in capsys.readouterr().err
+
+
+def test_it_will_not_guess_the_look_without_a_terminal(capsys, monkeypatch):
+    """No TTY means no prompt - the same rule that stops a scheduled task
+    hanging on the setup wizard. Exit 2 names both answers."""
+    from agent import setup
+
+    monkeypatch.setattr(setup, "fragment_path", lambda: pathlib.Path("x"))
+    monkeypatch.setattr(setup, "interactive", lambda: False)
+
+    assert cli.terminal_profile("") == 2
+    assert "blurred" in capsys.readouterr().err
+
+
+def test_an_explicit_look_installs_without_asking(capsys, monkeypatch):
+    from agent import setup
+
+    asked = []
+    monkeypatch.setattr(setup, "fragment_path", lambda: pathlib.Path("x"))
+    monkeypatch.setattr(setup, "interactive", lambda: asked.append(1) or True)
+    monkeypatch.setattr(setup, "install_profile",
+                        lambda blurred: pathlib.Path("written.json"))
+
+    assert cli.terminal_profile("blurred") == 0
+    assert asked == [], "it asked despite being told"
+    assert "Restart Windows Terminal" in capsys.readouterr().out
+
+
+def test_remove_says_so_when_there_was_nothing_there(capsys, monkeypatch):
+    from agent import setup
+
+    monkeypatch.setattr(setup, "fragment_path", lambda: pathlib.Path("x"))
+    monkeypatch.setattr(setup, "remove_profile", lambda: False)
+
+    assert cli.terminal_profile("remove") == 0
+    assert "no NOESIS profile" in capsys.readouterr().out

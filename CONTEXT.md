@@ -1213,6 +1213,14 @@ re-argue a decision that has already been measured.
                        they were written.
     eval/
       harness.py       runner and scorer
+      audit.py         A STATED DEVIATION, added 2026-09-25. What the recorded
+                       traces say actually happened: pass rate and cost per
+                       split, how failing runs ENDED, which mechanisms fired.
+                       Separate from harness.py on the same grounds as
+                       measure_recall.py - no model, no network, no quota, so it
+                       can run at any time without spending a scored pass. Built
+                       after a requirement audit did all of it by hand through a
+                       dozen throwaway scripts and turned up two defects.
       measure_recall.py  A STATED DEVIATION, added 2026-09-04. recall@k over
                        fixtures/recall-corpus.jsonl. Separate from harness.py
                        because it needs no model, no network and no quota - a
