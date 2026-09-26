@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from agent import policy
 from agent.policy import classify
 
 
@@ -151,9 +152,7 @@ def test_every_path_argument_is_checked(tmp_workspace):
     "echo x > ~/.bashrc",                         # owns the next shell
     "echo x >> ~/.zshrc",
     "cat ~/.ssh/id_rsa",
-    "python -c 'import shutil; shutil.rmtree(\"/\")'",   # a shell by another name
-    "node -e 'require(\"fs\").rmSync(\"/\")'",
-    "perl -e 'unlink glob \"*\"'",
+    "perl -e 'unlink glob \"*\"'",   # a shell by another name, and recoverable
     "git clean -fdx",                             # deletes untracked work
     "vi /private/etc/sudoers",                    # the macOS /etc symlink
     "cat /etc/shadow",
@@ -273,6 +272,221 @@ def test_installing_a_named_package_is_ordinary_work(tmp_workspace, command):
                     autonomous=False)[0] == "auto", command
 
 
+# --- permission modes -------------------------------------------------------
+#
+# The table IS the contract, so it is tested as one. `normal` is the row every
+# measured number in this repo was taken under and is the default, which is why
+# no existing test in this file passes a mode.
+
+READ = ("read_file", {"path": "a.py"})
+WRITE = ("write_file", {"path": "a.py", "text": "x"})
+DESTRUCTIVE = ("run_shell", {"command": "rm -rf build"})
+
+TABLE = {
+    "manual": {"read": "confirm", "write": "confirm", "destructive": "confirm"},
+    "plan": {"read": "auto", "write": "deny", "destructive": "deny"},
+    "normal": {"read": "auto", "write": "auto", "destructive": "confirm"},
+    "auto": {"read": "auto", "write": "auto", "destructive": "auto"},
+}
+
+
+@pytest.mark.parametrize("mode", policy.MODES)
+@pytest.mark.parametrize("risk,call", [("read", READ), ("write", WRITE),
+                                       ("destructive", DESTRUCTIVE)])
+def test_every_cell_of_the_mode_table(tmp_workspace, mode, risk, call):
+    verdict, _ = classify(*call, autonomous=False, mode=mode)
+
+    assert verdict == TABLE[mode][risk], f"{mode}/{risk}"
+
+
+def test_the_default_is_normal_so_nothing_moves_unless_asked(tmp_workspace):
+    """Every other test in this file omits `mode`, and every recorded number was
+    taken without one. The suite passing untouched is the real assertion; this
+    states it once out loud."""
+    for call in (READ, WRITE, DESTRUCTIVE):
+        assert (classify(*call, autonomous=False)[0]
+                == classify(*call, autonomous=False, mode="normal")[0])
+
+
+def test_auto_is_capped_by_autonomous(tmp_workspace):
+    """THE safety decision in this feature. `auto` is something a person turns
+    on while watching; unattended there is nobody to see the approval it skips,
+    so a queued task still refuses and lands in --review (FR-304)."""
+    unattended = classify(*DESTRUCTIVE, autonomous=True, mode="auto")
+    plain = classify(*DESTRUCTIVE, autonomous=True, mode="normal")
+
+    assert unattended[0] == plain[0] == "deny"
+
+
+@pytest.mark.parametrize("mode", policy.MODES)
+def test_the_hardline_tier_is_absolute_in_every_mode(tmp_workspace, mode):
+    """Modes move the auto/confirm line and nothing else. `auto` included:
+    saying "stop asking" is not the same as "you may wipe the disk"."""
+    for command in ("rm -rf /", "mkfs.ext4 /dev/sda1", "shutdown -h now"):
+        verdict, reason = classify("run_shell", {"command": command},
+                                   autonomous=False, mode=mode)
+        assert verdict == "deny", f"{mode}: {command}"
+        assert "no approval can allow it" in reason
+
+
+@pytest.mark.parametrize("command,allowed", [
+    ("ls -la", True),
+    ("grep -n TODO src/main.py", True),
+    ("cat README.md", True),
+    ("rm -rf build", False),
+    ("echo x > out.txt", False),
+])
+def test_plan_asks_read_only_not_the_risk_name(tmp_workspace, command, allowed):
+    """A risk NAME cannot answer this: run_shell is declared `write` whatever it
+    runs, so a table row would deny `ls` along with `rm`. It uses _read_only(),
+    the same predicate the planning PHASE uses, so the two cannot drift."""
+    verdict, _ = classify("run_shell", {"command": command},
+                          autonomous=False, mode="plan")
+
+    assert verdict == ("auto" if allowed else "deny"), command
+
+
+def test_plan_refuses_a_write_wherever_the_refusal_comes_from(tmp_workspace):
+    """Including the outside-the-workspace branch, which returns `confirm` in
+    every other mode."""
+    outside = str(tmp_workspace.parent / "elsewhere.md")
+
+    assert classify("write_file", {"path": outside, "text": "x"},
+                    autonomous=False, mode="plan")[0] == "deny"
+
+
+def test_auto_stops_asking_about_a_credential_too(tmp_workspace):
+    """Recorded rather than carved around: the whole point of `auto` is that it
+    does not ask, so it does not ask here either. It is why `auto` lasts one
+    session and is never read from .env."""
+    call = ("read_file", {"path": "~/.ssh/id_rsa"})
+
+    assert classify(*call, autonomous=False, mode="normal")[0] == "confirm"
+    assert classify(*call, autonomous=False, mode="auto")[0] == "auto"
+
+
+@pytest.mark.parametrize("given", ["", "banana", None, "auto-ish", "  "])
+def test_an_unknown_mode_falls_back_without_raising(given):
+    """A typo in AGENT_MODE must not stop the agent starting - the same rule
+    theme.resolve follows for a bad theme name."""
+    assert policy.resolve_mode(given) == "normal"
+
+
+@pytest.mark.parametrize("given,want", [
+    ("AUTO", "auto"), (" auto", "auto"), ("plan ", "plan"), ("Normal", "normal"),
+])
+def test_a_mode_is_read_the_way_it_was_plainly_meant(given, want):
+    """`AGENT_MODE=Auto` used to silently become `normal`, which is a setting
+    doing the opposite of what it says. Stripped and lowered, like config does
+    for the environment, so both paths agree."""
+    assert policy.resolve_mode(given) == want
+
+
+def test_the_four_modes_are_the_ones_the_table_knows():
+    assert set(policy.MODES) == set(TABLE)
+    assert policy.MODES[2] == "normal", "the default should sit where it reads"
+
+# --- the gate was POSIX-shaped, and this machine is not -------------------
+#
+# MEASURED 2026-09-26, by classifying the calls rather than reading the rules:
+# `read_file C:/Users/Jeevan/.ssh/id_rsa` was `auto`, and `del /s /q C:\Users`
+# was `auto`. Every pattern keyed on `~`, `$HOME`, `/etc/` and `rm -rf`, which
+# are what the container speaks; scored runs happen there and interactive use
+# happens on Windows, so the half that guards the real machine was missing.
+
+
+@pytest.mark.parametrize("path", [
+    "C:/Users/Jeevan/.ssh/id_rsa",
+    "C:" + chr(92) + "Users" + chr(92) + "Jeevan" + chr(92) + ".ssh" + chr(92) + "id_rsa",
+    "D:/Users/someone/.aws/credentials",
+    "C:/Users/Jeevan/.netrc",
+    "%USERPROFILE%/.ssh/config",
+    "/home/jeevan/.ssh/id_rsa",
+    "/Users/jeevan/.ssh/id_rsa",
+    "~/.ssh/id_rsa",
+])
+def test_a_credential_is_a_credential_however_the_path_is_spelled(tmp_workspace, path):
+    """Reading one is the one read that is not free, and it was free on Windows.
+
+    Not a leak to anyone - it is the user's own disk - but a guard that exists
+    and does not fire is worse than none, because it reads as covered.
+    """
+    verdict, reason = classify("read_file", {"path": path}, autonomous=False)
+
+    assert verdict == "confirm", path
+    assert "credential" in reason
+
+
+@pytest.mark.parametrize("command", [
+    "del /s /q C:" + chr(92) + "Users" + chr(92) + "Jeevan" + chr(92) + "Documents",
+    "rd /s /q build",
+    "rmdir /s C:" + chr(92) + "temp",
+    "Remove-Item -Recurse -Force .git",
+    "Remove-Item C:/Users/Jeevan/notes.md -Force",
+    "erase /s *.bak",
+])
+def test_a_recursive_delete_escalates_in_the_windows_spelling_too(tmp_workspace, command):
+    """`rm -rf` had no Windows spelling in DANGER. run_shell's argument is
+    `command`, which the outside-the-workspace check never inspects, so this
+    list is the only thing standing there."""
+    verdict, reason = classify("run_shell", {"command": command}, autonomous=False)
+
+    assert verdict == "confirm", command
+    assert "recursive delete" in reason
+
+
+@pytest.mark.parametrize("command", [
+    "dir /s",
+    "del build.log",
+    "del /q stale.txt",
+    "findstr /s TODO *.py",
+    "pytest -q",
+    "echo done > out.log",
+    "git status",
+])
+def test_ordinary_windows_commands_are_not_swept_up(tmp_workspace, command):
+    """The narrowness is load-bearing, exactly as it is for FR-204: `/q` is
+    quiet, not recursive, and `del /q stale.txt` is housekeeping. Only `/s`
+    means it walks a tree."""
+    assert classify("run_shell", {"command": command},
+                    autonomous=False)[0] == "auto", command
+
+
+@pytest.mark.parametrize("command", [
+    "type C:" + chr(92) + "Windows" + chr(92) + "System32" + chr(92) + "config" + chr(92) + "SAM",
+    "copy x.dll C:/Program Files/app/",
+    "echo x >> C:" + chr(92) + "ProgramData" + chr(92) + "app" + chr(92) + "config.ini",
+    "cat /etc/shadow",
+])
+def test_a_system_path_escalates_on_both_platforms(tmp_workspace, command):
+    verdict, _ = classify("run_shell", {"command": command}, autonomous=False)
+
+    assert verdict == "confirm", command
+
+
+def test_reading_outside_the_workspace_is_still_free(tmp_workspace):
+    """FR-302 as amended: reading the user's own files is the POINT, and none of
+    this narrows that. Only a credential costs a pause."""
+    for path in ("C:/Program Files/app/config.ini", "C:/Users/Jeevan/Documents/notes.md",
+                 "/usr/share/doc/README"):
+        assert classify("read_file", {"path": path},
+                        autonomous=False)[0] == "auto", path
+
+
+def test_writing_outside_the_workspace_still_asks_and_is_refused_unattended(tmp_workspace):
+    """The property the whole amendment rests on, asserted so a widened
+    workspace later cannot quietly take it away.
+
+    A SIBLING of the workspace, not a hardcoded `C:/...`: on Linux a Windows
+    path is not absolute, so `config.resolve` reads it as workspace-relative and
+    the test would assert the opposite of what it means to.
+    """
+    outside = str(tmp_workspace.parent / "elsewhere.md")
+    call = ("write_file", {"path": outside, "text": "x"})
+
+    assert classify(*call, autonomous=False)[0] == "confirm"
+    assert classify(*call, autonomous=True)[0] == "deny"
+
 # --- hardline: no approval can allow it -----------------------------------
 #
 # A person saying "allow" is trusting the agent with their files. It is not
@@ -288,6 +502,12 @@ def test_installing_a_named_package_is_ordinary_work(tmp_workspace, command):
     "shutdown -h now", "reboot", "sudo poweroff", "ls; halt",
     ":(){ :|:& };:",
     "cat x > /dev/sda",
+    # The same act in CODE. `rm -rf /` through a shell was always here; these
+    # reach the same files and were only `confirm` until 2026-09-26, which
+    # `auto` mode turned from a lesser tier into no pause at all.
+    "python -c 'import shutil; shutil.rmtree(\"/\")'",
+    "node -e 'require(\"fs\").rmSync(\"/\")'",
+    "python3 -c 'shutil.rmtree(\"~/\")'",
 ])
 def test_hardline_commands_are_refused_even_with_a_person_present(tmp_workspace, command):
     for autonomous in (False, True):

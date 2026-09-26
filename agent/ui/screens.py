@@ -33,6 +33,7 @@ from textual.worker import Worker, WorkerState
 from agent import cli
 from agent import config as settings
 from agent import graph
+from agent import policy
 from agent import tools
 from agent.ui import panes, theme, tiling
 from agent.ui.modals import ApprovalScreen, AskScreen, PlanScreen
@@ -70,7 +71,7 @@ SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 # The slash commands, and the only list of them: the suggester completes from
 # these keys, `command()` dispatches on them, and /help prints them.
 COMMANDS = {
-    "/chat": "start a session",
+    "/new": "start a fresh chat",
     "/threads": "resume past work",
     "/tasks": "the queue",
     "/schedules": "cron schedules, soonest first",
@@ -80,6 +81,7 @@ COMMANDS = {
     "/review": "queue a review of what needs attention",
     "/serve": "a read-only viewer in the browser",
     "/doctor": "every precondition, ok or FAIL",
+    "/mode": "how much the gate asks",
     "/setup": "change model or API key",
     "/help": "this list",
     "/exit": "close NOESIS",
@@ -696,6 +698,7 @@ class WorkspaceScreen(Screen):
         cfg = {"configurable": {
             "thread_id": self.thread,
             "autonomous": False,   # the switch that makes `confirm` pause, not refuse
+            "mode": app.gate,
             "trace": trace,
             "on_text": lambda t: app.call_from_thread(self.on_text, t),
         }}
@@ -881,11 +884,14 @@ class WorkspaceScreen(Screen):
             self.review()
         elif word == "/serve":
             self.serve()
+        elif word == "/mode":
+            self.app.action_next_gate()
         elif word == "/setup":
             self.app.action_setup()
-        elif word == "/chat":
-            self.focus_id = "chat"
-            self.mark_focus()
+        elif word == "/new":
+            # No thread: open_workspace mints one and SWITCHES the screen, which
+            # is why this does not stack a screen per chat.
+            self.app.open_workspace()
         else:
             self.open(OPENS[word])
         return True
@@ -980,7 +986,9 @@ class WorkspaceScreen(Screen):
             step = "⟨no plan⟩"
         model = (settings.MODEL if settings.PROVIDER == "anthropic"
                  else settings.OPENAI_MODEL).split("/")[-1]
-        bits = [step, model,
+        # The thread id lives here now: the chat pane says what the chat is
+        # about, and this is the line you read to resume it.
+        bits = [self.thread, step, model, self.app.gate,
                 f"{values.get('turns', 0)}/"
                 f"{values.get('max_turns', settings.MAX_TURNS)}",
                 # Against the budget, not alone: a bare 204,972 is a number
@@ -1007,6 +1015,8 @@ class NoesisApp(App):
         Binding("ctrl+t", "next_theme", "theme", priority=True),
         Binding("ctrl+g", "next_mode", "transparency", priority=True),
         Binding("ctrl+k", "setup", "setup", priority=True),
+        Binding("shift+tab", "next_gate", "mode", priority=True),
+        Binding("ctrl+n", "new_chat", "new chat", priority=True),
     ]
 
     def __init__(self, graph_app, goal: str | None = None,
@@ -1017,6 +1027,9 @@ class NoesisApp(App):
         for one in theme.THEMES:
             self.register_theme(one)
         self.mode = theme.resolve_mode(settings.TUI_TRANSPARENT)
+        # NOT `self.mode`: that is transparency. `auto` is refused from the
+        # environment for the reason cli.start_mode gives.
+        self.gate = cli.start_mode(None)
         theme.apply(self, settings.TUI_THEME, self.mode)
         self.graph = graph_app
         self._goal = goal
@@ -1061,6 +1074,20 @@ class NoesisApp(App):
         for screen in self.screen_stack:
             self.dress(screen)
         self.notify(f"transparency {self.mode}", timeout=1)
+
+    def action_new_chat(self) -> None:
+        self.open_workspace()
+
+    def action_next_gate(self) -> None:
+        """manual -> plan -> normal -> auto -> manual, for this session only."""
+        order = policy.MODES
+        self.gate = order[(order.index(self.gate) + 1) % len(order)]
+        self.notify(f"mode {self.gate}"
+                    + ("  -  nothing will pause" if self.gate == "auto" else ""),
+                    timeout=2)
+        for screen in self.screen_stack:
+            if isinstance(screen, WorkspaceScreen):
+                screen.paint_status()
 
     def action_setup(self) -> None:
         from agent.ui.setup import SetupScreen

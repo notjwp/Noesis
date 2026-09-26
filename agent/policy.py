@@ -16,18 +16,29 @@ from agent import config
 # same files and a rule matching one of the three protects nothing.
 _HOME = r"(?:~|\$HOME|\$\{HOME\})"
 
+# The same directory as a PATH. Those three spellings are what a POSIX script
+# writes; `C:\Users\jeevan\.ssh\id_rsa` is what this machine actually holds, and
+# it matched NOTHING until 2026-09-26 - measured, not supposed.
+_HOME_PATH = (r"(?:~|\$HOME|\$\{HOME\}|%USERPROFILE%"
+              r"|[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s]+"
+              r"|/(?:home|Users)/[^/\s]+)")
+
 # On macOS /etc, /var, /tmp and /home are symlinks into /private/. A command
 # written against /private/etc/sudoers works exactly like /etc/sudoers and walks
 # straight past a plain "/etc/" check. Not something reasoning from scratch
 # would produce.
-_SYSTEM_PATH = r"(?:/etc/|/private/(?:etc|var|tmp|home)/|/boot/|/dev/sd)"
+_SYSTEM_PATH = (r"(?:/etc/|/private/(?:etc|var|tmp|home)/|/boot/|/dev/sd"
+                # The POSIX half was the whole rule until 2026-09-26, while
+                # interactive use runs on Windows and scored runs in a container.
+                r"|[A-Za-z]:[\\/]+(?:Windows|Program Files)"
+                r"|[A-Za-z]:[\\/]+ProgramData[\\/])")
 
 # Files that hand over the next session, or the account. Writing one is not
 # destructive TODAY, which is exactly why it needs a person to see it.
 _SENSITIVE_FILE = (
-    rf"{_HOME}/\.ssh(?:/|\b)"
-    rf"|{_HOME}/\.(?:bashrc|zshrc|profile|bash_profile|zprofile)\b"
-    rf"|{_HOME}/\.(?:netrc|pgpass|npmrc|pypirc|aws|config/gh)\b"
+    rf"{_HOME_PATH}[\\/]\.ssh(?:[\\/]|\b)"
+    rf"|{_HOME_PATH}[\\/]\.(?:bashrc|zshrc|profile|bash_profile|zprofile)\b"
+    rf"|{_HOME_PATH}[\\/]\.(?:netrc|pgpass|npmrc|pypirc|aws|config[\\/]gh)\b"
     # A FILE called .env: at the start, or after a space, slash or quote. Not
     # the suffix of a glob - `find -name "*.env"` was refused for naming it.
     r"|(?:^|[\s/'\"=])\.env\b"
@@ -78,8 +89,14 @@ SENSITIVE = re.compile(_SENSITIVE_FILE, re.IGNORECASE)
 
 # The tools that RUN what they are given, and the argument carrying it. Both
 # halves matter: adding a tool here without its argument name is the same hole.
-EXECUTES = {"run_shell": "command", "start_terminal": "command",
-            "run_python": "code"}
+EXECUTES = {"run_shell": ("command", ""), "start_terminal": ("command", ""),
+            # The PREFIX is what makes one rule cover both spellings.
+            # `_INLINE_SOURCE` needs an interpreter invocation, which raw `code`
+            # does not have - so `run_shell("python -c ...rmtree(build)")` was
+            # `confirm` while `run_python` ran the same source at `auto`.
+            # Measured 2026-09-26; the 2026-09-10 fix put run_python in this
+            # dict and stopped one step short.
+            "run_python": ("code", "python -c ")}
 
 # Commands that must never run unreviewed. Matched against what EXECUTES names;
 # a hit escalates the tool's declared risk to `destructive`, and the RULE that
@@ -109,6 +126,14 @@ DANGER = [(name, re.compile(pattern, re.IGNORECASE)) for name, pattern in (
     # a redirect INTO anything sensitive, which no verb above would catch
     ("a redirect into a dotfile", rf">>?\s*{_HOME}/\."),
     ("a package from an unvetted source", _PACKAGE_SOURCE),
+    # `rm -rf` has no Windows spelling above, so `del /s /q C:\Users` classified
+    # `auto` until 2026-09-26. run_shell's argument is `command`, which the
+    # outside-the-workspace check never inspects, so this list is the only thing
+    # standing there.
+    ("a recursive delete",
+     rf"{_COMMAND_START}(?:del|erase)\b[^|]*\s/s\b"
+     rf"|{_COMMAND_START}(?:rd|rmdir)\b[^|]*\s/s\b"
+     r"|\bRemove-Item\b[^|]*\s-(?:Recurse|Force)\b"),
 )]
 
 # Above `destructive`: refused with a person present, and no approval can allow
@@ -117,6 +142,11 @@ DANGER = [(name, re.compile(pattern, re.IGNORECASE)) for name, pattern in (
 HARDLINE = [(name, re.compile(pattern, re.IGNORECASE)) for name, pattern in (
     ("deleting the root or home directory",
      rf"\brm\s+(-\w+\s+)*-\w*[rf]\w*\s+(?:-\w+\s+)*(?:/\*?|{_HOME}/?)(?:\s|$)"),
+    # The same act in code. `rm -rf /` above is a SHELL spelling, and
+    # `shutil.rmtree("/")` reaches the same files - measured 2026-09-26, it ran
+    # at `auto` in auto mode because only DANGER knew about it.
+    ("deleting the root or home directory in code",
+     rf"{_DELETES}\s*\(\s*r?['\"](?:/|{_HOME_PATH})/?['\"]"),
     ("writing a block device", r"(?:\bdd\b[^|]*\bof=|>\s*)/dev/(?:sd|nvme|hd|vd|mmcblk|disk)"),
     ("formatting a filesystem", r"\bmkfs(?:\.\w+)?\b"),
     ("shutting the machine down", rf"{_COMMAND_START}(?:shutdown|reboot|halt|poweroff)\b"),
@@ -148,7 +178,43 @@ def sync() -> dict[str, str]:
 
 sync()
 
-VERDICT_BY_RISK = {"read": "auto", "write": "auto", "destructive": "confirm"}
+RISKS = ("read", "write", "destructive")
+
+# What each risk MEANS, per mode. `normal` is the row every measured number in
+# this repo was taken under, and the default, so nothing moves unless asked.
+# HARDLINE is checked before this table and no mode reaches it.
+MODES = ("manual", "plan", "normal", "auto")
+VERDICT_BY_MODE = {
+    "manual": {"read": "confirm", "write": "confirm", "destructive": "confirm"},
+    "normal": {"read": "auto", "write": "auto", "destructive": "confirm"},
+    "auto": {"read": "auto", "write": "auto", "destructive": "auto"},
+}
+
+# `plan` is not a row here, because a risk NAME cannot answer it: run_shell is
+# declared `write` whatever it runs, so a row would deny `ls` along with `rm`.
+# It is a branch in classify() over _read_only(), the predicate the planning
+# PHASE already uses - the two agree and are deliberately not merged.
+
+
+def resolve_mode(name: str) -> str:
+    """A mode name, or the default. Never raises, for the same reason
+    theme.resolve does not: a typo must not stop the agent starting.
+
+    Stripped and lowered here as well as in config, so ` Auto` is the mode it
+    plainly means rather than silently the default.
+    """
+    return (name or "").strip().lower() if (name or "").strip().lower() in MODES \
+        else "normal"
+
+
+def _escalate(mode: str) -> str:
+    """A branch that RAISES the floor to `confirm`, read through the mode.
+
+    `auto` is the mode that does not ask, so it does not ask here either. `plan`
+    never arrives with a write - classify() refused it earlier - so a credential
+    READ still pauses here, which is right: plan bans writing, not looking.
+    """
+    return "auto" if mode == "auto" else "confirm"
 
 # Arguments whose value is a filesystem path and must stay inside the
 # workspace (FR-302). Named explicitly: guessing by key name would miss one.
@@ -201,7 +267,7 @@ def register(name: str, risk: str | None) -> str:
     trace row claimed a condition nobody had checked. A default that asserts the
     safe-looking answer hides exactly what it should surface.
     """
-    RISK[name] = risk if risk in VERDICT_BY_RISK else "destructive"
+    RISK[name] = risk if risk in RISKS else "destructive"
     return RISK[name]
 
 
@@ -222,14 +288,20 @@ def risk_of(name: str) -> str | None:
 
 
 def classify(name: str, args: dict, autonomous: bool,
-             planning: bool = False) -> tuple[str, str]:
+             planning: bool = False, mode: str = "normal") -> tuple[str, str]:
     """Return (verdict, reason). verdict is one of auto | confirm | deny.
 
-    `planning` defaults False so every existing caller keeps the behaviour it was
+    `planning` and `mode` both default to what every existing caller was
     measured with. Still pure, still no side effects (FR-305): the gate suspends
-    and re-executes from its first line, so this function must be safe to run
-    twice.
+    and re-executes from its first line, so this must be safe to run twice.
     """
+    # Both of these describe a person at the keyboard: `auto` skips an approval
+    # nobody would see, `manual` waits for one nobody will give. Unattended they
+    # read as `normal`, which still refuses destructive calls (FR-304). `plan`
+    # survives, because a read-only task is a coherent thing to queue.
+    mode = resolve_mode(mode)
+    if autonomous and mode in ("manual", "auto"):
+        mode = "normal"
     outside = next((str(args[key]) for key in PATH_ARGS
                     if key in args and not _inside_workspace(str(args[key]))), "")
 
@@ -251,7 +323,9 @@ def classify(name: str, args: dict, autonomous: bool,
     # through run_shell while run_python ran X at `auto`. Measured 2026-09-10,
     # and the agent switched tools on its own. An escalation one tool enforces
     # and another ignores is not a boundary.
-    source = str(args.get(EXECUTES.get(name, ""), "") or "")
+    holds, prefix = EXECUTES.get(name, ("", ""))
+    raw = str(args.get(holds, "") or "") if holds else ""
+    source = prefix + raw if raw else ""
     hardline = _first(HARDLINE, source) if source else None
     if hardline:
         return "deny", f"{name} is {hardline}; refused, and no approval can allow it"
@@ -259,14 +333,22 @@ def classify(name: str, args: dict, autonomous: bool,
     if rule:
         risk = "destructive"
 
-    verdict = VERDICT_BY_RISK[risk]
+    if mode == "plan":
+        # The ceiling. Same predicate as the planning phase above, so a change
+        # to what counts as read-only cannot leave the two disagreeing.
+        if not _read_only(name, args, risk):
+            return "deny", (f"plan mode: {name} could change something. Read and "
+                            f"search now; switch mode to act.")
+        verdict = "auto"
+    else:
+        verdict = VERDICT_BY_MODE[mode][risk]
     # A credential is the one thing READING is not free. Applied to path
     # arguments and not only to run_shell, or the same file gets two answers
     # depending on which tool asks for it.
     secret = next((str(args[key]) for key in PATH_ARGS
                    if key in args and SENSITIVE.search(str(args[key]))), "")
     if secret:
-        return _unattended("confirm", autonomous,
+        return _unattended(_escalate(mode), autonomous,
                            f"{name} touches a credential: {secret}")
 
     # FR-302 as amended 2026-09-08. Outside the workspace can never be `auto`,
@@ -274,8 +356,7 @@ def classify(name: str, args: dict, autonomous: bool,
     # point. A write out there asks; unattended, `confirm` degrades to deny
     # below, so nothing writes outside without a person present.
     if outside and not _read_only(name, args, risk):
-        verdict = "confirm"
-        return _unattended(verdict, autonomous,
+        return _unattended(_escalate(mode), autonomous,
                            f"{name} writes outside the workspace: {outside}")
     # The rule in the reason, because the interface remembers approvals by it:
     # "destructive" alone would let one allow cover every category.

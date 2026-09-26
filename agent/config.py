@@ -210,6 +210,10 @@ MAX_WORKERS = int(_env("AGENT_MAX_WORKERS", "1"))
 # DEFAULT OFF because it does not pay, not because it does not work: 1/3 on
 # add-endpoint, stuck at the cap 3/3, 82,435 median tokens against NFR-402's
 # 60,000. See eval/CHANGELOG.md.
+# How much the gate asks: manual | plan | normal | auto. Validated by
+# policy.resolve_mode rather than here, because config must not import policy.
+MODE = _env("AGENT_MODE", "normal").strip().lower()
+
 PLAN_ENABLED = _env("AGENT_PLAN", "off").strip().lower() not in (
     "0", "off", "false")
 

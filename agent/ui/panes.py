@@ -61,6 +61,29 @@ def tool_text(entry: dict) -> Text:
     return line
 
 
+def chat_name(goal: str | None, messages: list | None, width: int = 44) -> str:
+    """What a chat is ABOUT, for its border title.
+
+    The thread id is a serial number: it is what you type to resume one and it
+    says nothing about which one this is. Kept in the status bar and /threads,
+    where it is looked up, rather than on the pane, where it is read.
+
+    HEAD truncation, not middle_out: that keeps both ends because a filename is
+    the informative half of a path, and here the first words are.
+    """
+    text = " ".join(str(goal or "").split())
+    for message in messages or []:
+        if text:
+            break
+        # A tool RESULT is also role "user" and its content is a list of blocks,
+        # so the first user message is not necessarily the one a person typed.
+        if message.get("role") == "user" and isinstance(message.get("content"), str):
+            text = " ".join(message["content"].split())
+    if not text:
+        return "new"
+    return text if len(text) <= width else text[:width - 1].rstrip() + "…"
+
+
 def middle_out(text: str, width: int) -> str:
     """Truncate the MIDDLE of a long path. The filename is the informative
     half, and lopping the tail off removes exactly that."""
@@ -140,7 +163,8 @@ class ChatPane(Pane):
                       auto_scroll=True, max_lines=MAX_LINES)
 
     def refresh_from(self, screen) -> None:
-        self.border_title = f"chat · {screen.thread}"
+        name = chat_name(screen._goal, screen._state.get("messages"))
+        self.border_title = f"chat · {name}"
         log = self.query_one(RichLog)
         log.clear()
         for renderable in screen.transcript:

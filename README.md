@@ -118,6 +118,7 @@ noesis --submit "Rotate the API keys"          # queue it and come back later
 noesis --worker                                # drain the queue (leave this running)
 noesis --tasks                                 # what is queued / running / done
 noesis --attach <id>                           # watch one as it runs; ctrl-c detaches
+noesis --mode plan "..."                       # manual | plan | normal | auto (shift+tab in the TUI)
 
 noesis --terminal-profile clear                # a transparent NOESIS profile in Windows Terminal
 
@@ -221,7 +222,7 @@ place Docker is needed.
 ```bash
 docker build -f Containerfile -t personal-agent .
 
-# 1,269 offline tests - no API key, no network
+# 1,345 offline tests - no API key, no network
 docker run --rm --network none --read-only --tmpfs /tmp:exec \
   -v "$PWD:/app:ro" -v "$PWD/eval/workspace:/workspace" \
   -v "$PWD/.agent/homes/_t:/state" personal-agent python -m pytest -q

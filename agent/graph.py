@@ -293,6 +293,9 @@ def gate(state: AgentState, config: RunnableConfig) -> dict:
     every already-executed tool would fire again on every resume.
     """
     autonomous = config.get("configurable", {}).get("autonomous", True)
+    # Beside `autonomous` and through the same dict, so the gate stays pure and
+    # a scored run - which passes neither - keeps what it was measured with.
+    mode = config.get("configurable", {}).get("mode", settings.MODE)
     # While planning the agent may look but not touch (UR-02). Enforced in the
     # gate rather than asked for in the prompt, because an approval shown after
     # the files have already changed is theatre.
@@ -300,7 +303,8 @@ def gate(state: AgentState, config: RunnableConfig) -> dict:
     approved, denied = [], []
 
     for call in _tool_calls(state["messages"][-1]):
-        verdict, reason = classify(call["name"], call["input"], autonomous, planning)
+        verdict, reason = classify(call["name"], call["input"], autonomous,
+                                   planning, mode)
         if verdict == "auto":
             approved.append(call)
         elif verdict == "deny":
@@ -313,7 +317,7 @@ def gate(state: AgentState, config: RunnableConfig) -> dict:
             if isinstance(decision, dict) and decision.get("decision") == "amend":
                 call = {**call, "input": {**call["input"], **(decision.get("input") or {})}}
                 verdict, reason = classify(call["name"], call["input"],
-                                           autonomous, planning)
+                                           autonomous, planning, mode)
                 if verdict == "deny":
                     denied.append({**call, "reason": reason})
                     continue

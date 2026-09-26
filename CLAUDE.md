@@ -10,7 +10,7 @@ table). Read those when you need history; do not copy history back into here.
 ## State
 
 `act -> gate -> execute -> reflect` over a two-provider adapter, a policy gate that is the boundary
-(a kernel-enforced sandbox for scored runs only), CLI and Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,269 offline tests**, green with no API key, no network, a
+(a kernel-enforced sandbox for scored runs only), CLI and Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,345 offline tests**, green with no API key, no network, a
 read-only root filesystem, and without the `mcp` package installed.
 
 | | |
@@ -71,6 +71,21 @@ Ordered by how often they have caught something.
   git - `git status` would have said `fatal: not a git repository`. Check the fixture's
   WORLD, not only its wording, before writing the bar. Reverted anyway: unmeasured
   plus 775 schema chars per turn is a cost with nothing on the other side.
+- **A permissive mode is what tells you which `confirm` was load-bearing.** Adding
+  `auto` turned four quiet escalations into nothing and so found them: `run_python`
+  was STILL a second door (`_INLINE_SOURCE` needs an interpreter invocation, which
+  raw `code` has not - `EXECUTES` carries a per-tool prefix now), HARDLINE knew
+  `rm -rf /` but not `shutil.rmtree("/")`, and `manual` unattended denied even
+  reads. The run_python regression test had passed for the wrong reason since
+  2026-09-10: every case named a SYSTEM PATH, so the delete was never tested.
+- **A guard written against the container does not guard the machine you use.** Every
+  path rule keyed on what Linux speaks - `~`, `$HOME`, `/etc/`, `rm -rf` - while scored
+  runs happen in a container and interactive use happens on Windows. Measured 2026-09-26
+  by CLASSIFYING calls rather than reading rules: `read_file C:/Users/<you>/.ssh/id_rsa`
+  and `del /s /q C:\Users\<you>\Documents` were both `auto`. A guard that exists and never
+  fires is worse than none, because it reads as covered. Note also that `run_shell`'s
+  argument is `command`, which the outside-the-workspace check never inspects - DANGER is
+  the only thing standing there.
 - **A gate rule that never fired in a passing run is not proven safe.** FR-204's first
   version denied `pip install -r ./requirements.txt`, because a clause for a bare local
   path matches every FLAG that takes one. `missing-dep` scored 3/3 and the rule fired 0
@@ -361,6 +376,13 @@ git clone --filter=blob:none --sparse https://github.com/notjwp/Noesis.git && cd
                                   # `noesis` landed. Windows: `;` for `&&`, `python` for `python3`
 
 python -m agent "goal"            # interactive; destructive calls pause for approval
+python -m agent --mode plan "goal"   # manual | plan | normal | auto - how much
+                                  # the gate asks. `normal` is the default and
+                                  # every measured number was taken under it.
+                                  # `plan` is a CEILING over _read_only(), not
+                                  # the planning phase. `auto` asks nothing, is
+                                  # capped to `normal` when autonomous, and is
+                                  # refused from .env - shift+tab in the TUI
 python -m agent --tui             # NOESIS; --tui --resume <id> opens one thread
                                   # FIRST RUN needs no .env: with no key and a TTY,
                                   # any command opens the setup wizard, which PROBES
@@ -416,7 +438,7 @@ python eval/audit.py --since 20260923         # only runs on the current code
 scripts/reset.sh <case-id>        # restore /workspace to a fixture's state (idempotent)
 powershell -File scripts/install-tasks.ps1        # run --channel and --worker at logon
 powershell -File scripts/install-tasks.ps1 -Remove
-pytest                            # 1,269 tests, no API key, no network
+pytest                            # 1,345 tests, no API key, no network
 ```
 
 Tests run in the container, which is the measured environment: read-only root, `--network none`,

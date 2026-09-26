@@ -11,7 +11,7 @@ import os
 import pytest
 from textual.widgets import Input, Static
 
-from agent import config
+from agent import config, policy
 from agent.ui import panes, screens, theme, tiling
 
 
@@ -1392,3 +1392,166 @@ def test_a_thread_well_inside_its_budget_says_nothing():
         assert "running low" not in said
 
     drive(app, script)
+
+
+# --- permission modes -------------------------------------------------------
+
+
+def test_the_status_bar_names_the_permission_mode():
+    """An invisible permission mode is how `auto` gets left on. It sits beside
+    the model and the turn count, not behind a command."""
+    app = workspace()
+
+    async def script(pilot):
+        node = app.screen.query_one("#status", Static)
+        shown = getattr(node.content, "plain", str(node.content))
+        assert app.gate in shown
+
+    drive(app, script)
+
+
+def test_shift_tab_cycles_the_mode_and_repaints():
+    """The cycle mirrors theme.cycle_mode's shape: one key, one direction, back
+    to where it started. Repainting is the half that makes it visible - and the
+    first version called a method that does not exist, which no test caught."""
+    app = workspace()
+    seen = []
+
+    async def script(pilot):
+        start = policy.MODES.index(app.gate)
+        for _ in policy.MODES:
+            await pilot.press("shift+tab")
+            await pilot.pause()
+            node = app.screen.query_one("#status", Static)
+            seen.append((app.gate,
+                         getattr(node.content, "plain", str(node.content))))
+
+    drive(app, script)
+
+    assert [mode for mode, _ in seen][-1] == "normal" or len(seen) == len(policy.MODES)
+    assert len({mode for mode, _ in seen}) == len(policy.MODES), "a mode was skipped"
+    for mode, shown in seen:
+        assert mode in shown, f"the bar did not repaint for {mode}"
+
+
+def test_auto_is_not_where_the_interface_starts():
+    """It is reachable by one keypress and is never the default, however
+    AGENT_MODE is set - cli.start_mode refuses it from the environment."""
+    app = workspace()
+
+    assert app.gate != "auto"
+
+
+def test_bare_paints_nothing_on_a_real_workspace_with_content():
+    """MEASURED 2026-09-26 by looking at a screenshot, not a test: the chat pane
+    was solid while the landing screen was bare.
+
+    RichLog and DataTable carry TEXTUAL's own background, so our stylesheet
+    never naming them is not the same as them being transparent - and the
+    landing screen has neither, which is why it looked right. The theme suite's
+    Host has neither either, so this has to run against a real workspace with a
+    transcript in it.
+    """
+    app = workspace()
+    app.mode = "bare"
+
+    async def script(pilot):
+        await pilot.pause()
+        one = app.current_theme
+        fills = {c.lower() for c in (one.background, one.surface, one.panel)}
+        painted = {}
+        # The RESOLVED style of each widget, not the compositor's strips: an
+        # empty RichLog emits no segment to inspect and the strip check passed
+        # with the bug in place.
+        for node in app.screen.query("*"):
+            colour = getattr(node.styles.background, "hex", "")
+            if colour and colour.lower() in fills:
+                painted[f"{type(node).__name__}#{node.id}"] = colour
+
+        assert not painted, f"still filled in bare: {painted}"
+
+    drive(app, script)
+
+
+# --- what a chat is called --------------------------------------------------
+
+
+@pytest.mark.parametrize("goal,messages,expected", [
+    ("fix the failing tests", None, "fix the failing tests"),
+    ("fix\nthe   failing\ttests", None, "fix the failing tests"),
+    (None, [{"role": "user", "content": "why is rich failing?"}],
+     "why is rich failing?"),
+    (None, None, "new"),
+    ("   ", [], "new"),
+])
+def test_a_chat_is_named_after_what_it_is_about(goal, messages, expected):
+    """The thread id is a serial number: it is what you TYPE to resume a chat
+    and says nothing about which one it is. It moved to the status bar."""
+    assert panes.chat_name(goal, messages) == expected
+
+
+def test_a_tool_result_is_not_mistaken_for_something_a_person_typed():
+    """A tool result is also role `user`, and its content is a list of blocks
+    rather than a string - so the first user message is not necessarily one
+    anybody wrote."""
+    messages = [
+        {"role": "user", "content": [{"type": "tool_result", "content": "exit 0"}]},
+        {"role": "user", "content": "what happened to the build?"},
+    ]
+
+    assert panes.chat_name(None, messages) == "what happened to the build?"
+
+
+def test_a_long_goal_keeps_its_HEAD():
+    """Unlike middle_out, which keeps both ends because a filename is the
+    informative half of a path. Here the first words are."""
+    name = panes.chat_name("investigate why the parser drops the last window "
+                           "when the input is empty", None, width=20)
+
+    assert name.startswith("investigate why")
+    assert len(name) == 20
+    assert name.endswith("\u2026")
+
+
+def test_the_status_bar_carries_the_thread_id():
+    """It left the chat pane's title, so it has to be somewhere: this is the
+    line you read to resume a session."""
+    app = workspace()
+
+    async def script(pilot):
+        node = app.screen.query_one("#status", Static)
+        shown = getattr(node.content, "plain", str(node.content))
+        assert app.screen.thread in shown
+
+    drive(app, script)
+
+
+def test_the_chat_pane_is_titled_by_the_conversation_not_the_id():
+    app = workspace()
+
+    async def script(pilot):
+        pane = app.screen.query_one("#pane-chat")
+        assert app.screen.thread not in str(pane.border_title)
+        assert "chat" in str(pane.border_title)
+
+    drive(app, script)
+
+
+def test_a_new_chat_gets_its_own_thread_without_stacking_a_screen():
+    """`/chat` said "start a session" and only moved focus, so there was no way
+    to begin a fresh one without quitting. open_workspace SWITCHES rather than
+    pushes - stacking one screen per chat is a bug it already fixed once."""
+    app = workspace()
+    seen = []
+
+    async def script(pilot):
+        seen.append((app.screen.thread, len(app.screen_stack)))
+        await pilot.press("ctrl+n")
+        await pilot.pause()
+        seen.append((app.screen.thread, len(app.screen_stack)))
+
+    drive(app, script)
+
+    first, second = seen
+    assert first[0] != second[0], "the same thread was reopened"
+    assert first[1] == second[1], "a screen was stacked"

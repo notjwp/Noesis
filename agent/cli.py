@@ -25,7 +25,7 @@ import uuid
 from langgraph.types import Command
 
 from agent import config as settings
-from agent import mcp, memory, skills, tools
+from agent import mcp, memory, policy, skills, tools
 from agent.graph import get_app, new_state
 
 RULE = "-" * 64
@@ -259,7 +259,20 @@ def ask_human(payload: dict) -> str | dict:
 
 # -------------------------------------------------------------------- session
 
-def run_session(goal: str | None, thread: str, app) -> int:
+def start_mode(chosen: str | None) -> str:
+    """The mode a session begins in.
+
+    `auto` is refused from the ENVIRONMENT on purpose: it is the mode that stops
+    asking entirely, and a mode that stops asking must be turned on deliberately
+    for one session, not left in a .env and forgotten.
+    """
+    if chosen:
+        return chosen
+    from_env = policy.resolve_mode(settings.MODE)
+    return "normal" if from_env == "auto" else from_env
+
+
+def run_session(goal: str | None, thread: str, app, mode: str = "normal") -> int:
     """One interactive run, from a fresh goal or a resumed thread.
 
     A single loop shape covers both, plus every approval pause, because resuming
@@ -274,6 +287,7 @@ def run_session(goal: str | None, thread: str, app) -> int:
     cfg = {"configurable": {
         "thread_id": thread,
         "autonomous": False,      # the switch that makes `confirm` pause, not refuse
+        "mode": mode,
         "trace": trace,
         "on_text": _on_text,
     }}
@@ -443,6 +457,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="listen on email; queues messages and answers them")
     parser.add_argument("--cancel", metavar="TASK_ID",
                         help="stop a queued or running task")
+    parser.add_argument("--mode", choices=policy.MODES, default=None,
+                        help="how much the gate asks: manual (everything), "
+                             "plan (reads only), normal, auto (nothing). "
+                             "`auto` lasts one session and is never read from .env")
     parser.add_argument("--terminal-profile", nargs="?", const="", default=None,
                         choices=("blurred", "clear", "remove", ""),
                         metavar="blurred|clear|remove",
@@ -772,8 +790,8 @@ def _dispatch(args, app, parser) -> int:
             print(f"no such thread: {args.resume}\n", file=sys.stderr)
             list_threads(app)
             return 2
-        return run_session(None, args.resume, app)
+        return run_session(None, args.resume, app, start_mode(args.mode))
 
     if not args.goal:
         parser.error("give a goal, or use --list / --resume")
-    return run_session(args.goal, uuid.uuid4().hex[:8], app)
+    return run_session(args.goal, uuid.uuid4().hex[:8], app, start_mode(args.mode))

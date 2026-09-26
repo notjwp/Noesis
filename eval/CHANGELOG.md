@@ -5,6 +5,201 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## A chat is named after itself (2026-09-26)
+
+The chat pane's border read `chat · 7c1cacd5`. A thread id is a serial number:
+it is what you TYPE to resume a session and it says nothing about which one you
+are looking at. It now reads `chat · create a simple python file which…` -
+the goal, or the first thing a person actually typed.
+
+`panes.chat_name()` takes the launch goal, falling back to the first user
+message. HEAD truncation, not `middle_out`: that helper keeps both ends because
+a filename is the informative half of a path, and here the first words are.
+
+**A tool RESULT is also role `user`**, with a list of blocks for content rather
+than a string - so "the first user message" is not necessarily one anybody
+wrote, and the scan skips them. A chat with nothing in it yet is `new`.
+
+The id moved to the status bar, beside the mode and the model, because it is
+still what `--resume` wants. It is also in `/threads`.
+
+1,336 -> 1,345 tests.
+
+## Permission modes: manual, plan, normal, auto (2026-09-26)
+
+**`bare` missed one widget, and a screenshot found it.** `RichLog#chat-log`
+resolved to `$surface` while every sibling was `#00000000`: Textual paints
+RichLog and DataTable itself, so OUR stylesheet never naming them is not the
+same as them being bare. Invisible on the landing screen, which has no RichLog -
+so it looked right until a chat opened.
+
+The first test written for it PASSED WITH THE BUG IN PLACE. It read the
+compositor's strips, and an empty RichLog emits no segment to inspect. Rewritten
+to read each widget's RESOLVED style, where the fill is plainly visible; it now
+fails without the fix.
+
+
+**An interface over `classify()`, not a change to it.** No eval: the default is
+unchanged, scored runs pass no mode at all, and the whole existing suite passing
+untouched is the assertion that says so.
+
+NOESIS had three permission BEHAVIOURS and no way to pick one - `autonomous`
+(the worker), the planning PHASE, and interactive. Now four modes, and the table
+is the contract:
+
+| mode | read | write | destructive | HARDLINE |
+|---|---|---|---|---|
+| `manual` | confirm | confirm | confirm | deny |
+| `plan` | auto | deny | deny | deny |
+| `normal` | auto | auto | confirm | deny |
+| `auto` | auto | auto | auto | deny |
+
+`--mode`, `/mode`, shift+tab, and the mode sits in the status bar beside the
+model - an invisible permission mode is how `auto` gets left on.
+
+**`autonomous` caps the mode**, in one line: unattended, `auto` reads as
+`normal`, so a queued task still refuses destructive calls and lands in
+`--review`. That is the safety decision in this feature and it has the most
+important test: mutate the cap and `test_auto_is_capped_by_autonomous` goes red.
+
+**`plan` could not be a row in the table, and finding that out was the work.**
+The first version made it one and denied `ls -la`, because `run_shell` is
+declared `write` whatever it runs - a risk NAME cannot answer "would this change
+anything". It is a branch over `_read_only()`, the same predicate the planning
+PHASE uses, so the two cannot drift. `plan` and the phase are deliberately not
+merged: `AGENT_PLAN` is untouched and stays off, so none of its measured cost
+(~30% more tokens, no pass-rate gain, fired in 19 of 1,402 runs) is inherited.
+
+**Verified live, and the second denial is the one that matters:**
+
+```
+x write_file  plantest.txt                              DENIED
+x run_python  {"code": "with open('plantest.txt','w')   DENIED
+```
+
+The escape through an untyped tool is closed, because `run_python` is not
+read-only either. Nothing was written. In `auto`, `rm -rf autotest` ran with no
+pause, which is a `confirm` in `normal`.
+
+**`auto` is refused from the ENVIRONMENT.** `AGENT_MODE=auto` in a `.env` reads
+as `normal`; it has to be asked for per session, by flag or keypress. The reason
+is the measurement from earlier the same day: 13 of 14 probed shell commands
+already run with no pause - `format D: /q`, `robocopy C:\empty <Documents> /mir`,
+`cmd /c del /s /q`, `powershell -EncodedCommand` - because the gate can only
+pattern-match an opaque command string. **`auto` removes the pause from the rest
+too.** It is a real feature and it converts the gate from a speed bump into
+nothing; a mode that stops asking must be turned on deliberately, not left in a
+file and forgotten. For the same reason `auto` stops asking about a credential
+read - recorded rather than carved around, since not asking is the whole point.
+
+**A bug shipped past the entire suite and one new test caught it.**
+`action_next_gate` called `screen.status()`; the method is `paint_status()`.
+1,327 tests passed with a call that would have raised, because nothing exercised
+the binding. The cycle test presses shift+tab and reads the bar back.
+
+1,296 -> 1,335 tests. Four mutations: break the `autonomous` cap, and the one
+test that guards the safety decision goes red; make `plan` key on the risk name
+and `ls`/`cat`/`grep` go red; make `_escalate` ignore `auto` and the credential
+test goes red; restore `screen.status()` and the cycle test goes red.
+
+**Four holes found by probing the modes against the rest of the machinery**, and
+the first one is why `auto` needed probing at all: a mode that never pauses turns
+every "confirm" that was doing real work into nothing.
+
+1. **`run_python` was a second door, still.** `run_shell("python -c
+   ...rmtree('build')")` was `confirm` and `run_python` with the same source was
+   `auto`. The 2026-09-10 fix put `run_python` in `EXECUTES` and stopped one step
+   short: `_INLINE_SOURCE` needs an interpreter INVOCATION, which raw `code` does
+   not have. `EXECUTES` now carries a per-tool PREFIX - `run_python` is read as
+   `python -c <code>` - so one rule covers both spellings. **The existing
+   regression test passed for the wrong reason**: every case in it named a system
+   path, so `_SYSTEM_PATH` caught them and the delete was never what was tested.
+   Replayed over all **319 recorded run_python calls: 0 affected.**
+2. **HARDLINE was shell-only.** `shutil.rmtree("/")` ran at `auto` in auto mode,
+   while `rm -rf /` was refused outright. Same act, same files. Now hardline in
+   both spellings - which STRENGTHENS two existing cases from `confirm` to
+   `deny`, so they moved into the hardline test rather than being relaxed.
+3. **`manual` unattended denied everything, reads included.** `AGENT_MODE=manual`
+   in a .env would have made every queued task fail having done nothing. It is
+   capped like `auto` now: both describe a person at the keyboard - one skips an
+   approval nobody would see, the other waits for one nobody will give - so
+   unattended both read as `normal`. `plan` survives, because a read-only task is
+   a coherent thing to queue.
+4. **`AGENT_MODE=Auto` silently meant `normal`.** `config.MODE` strips and lowers;
+   `resolve_mode` did not, so the two paths disagreed and a setting could do the
+   opposite of what it said.
+
+Probes that came back clean and are worth recording as checked: the planning
+PHASE still outranks every mode, `ask_user` is `read` so the agent can still ask
+in plan mode, `ls && rm -rf build` and `cat a > b` are denied in plan while
+`ls | grep` is not, and an unknown tool is denied in `auto`.
+
+## The gate was POSIX-shaped, and this machine is not (2026-09-26)
+
+**Two guardrails did not fire on Windows.** Found by classifying calls rather
+than reading rules, after a question about giving the agent global access - which
+it already has, and that is exactly why these mattered.
+
+**What was already true**, and is unchanged: FR-302 was amended on 2026-09-08 so
+the workspace stopped being a wall. Reading anything anywhere is `auto` -
+"reading the user's own files is the point" - and a write outside the workspace
+is `confirm`, which degrades to `deny` unattended. Measured again here and
+asserted in a test so a widened workspace later cannot quietly take it away.
+
+**The two holes, measured:**
+
+| call | was | now |
+|---|---|---|
+| `read_file C:/Users/Jeevan/.ssh/id_rsa` | **auto** | confirm |
+| `read_file C:/Users/Jeevan/.aws/credentials` | **auto** | confirm |
+| `run_shell del /s /q C:\Users\Jeevan\Documents` | **auto** | confirm |
+| `run_shell type C:\Windows\System32\config\SAM` | **auto** | confirm |
+
+Every pattern keyed on what the CONTAINER speaks. `_HOME` was `~`, `$HOME` and
+`${HOME}`; `_SYSTEM_PATH` was `/etc/`, `/boot/`, `/dev/sd`; the only recursive
+delete in DANGER was `rm -rf`. Scored runs happen in a Linux container and
+interactive use happens on Windows, so the half that guards the real machine was
+the half that did not exist. A guard that exists and never fires is worse than
+none, because it reads as covered.
+
+- `_HOME_PATH` is new and matches a home directory as a PATH - `C:\Users\<name>`,
+  `/home/<name>`, `/Users/<name>`, `%USERPROFILE%` - beside the three shell
+  spellings. `_SENSITIVE_FILE` uses it, and accepts `\` as a separator.
+- `_SYSTEM_PATH` gains `C:\Windows`, `C:\Program Files`, `C:\ProgramData\`.
+- DANGER gains `del /s`, `rd|rmdir /s` and `Remove-Item -Recurse|-Force`. Note
+  run_shell's argument is `command`, which the outside-the-workspace check never
+  inspects - DANGER is the only thing standing there, which is what made a
+  missing Windows spelling a hole rather than an omission.
+
+**Narrow on purpose, and FR-204 is why.** `/q` is quiet, not recursive, so
+`del /q stale.txt` stays ordinary work and only `/s` - which walks a tree -
+escalates. The first draft caught `/q` too and would have interrupted
+housekeeping.
+
+**Replayed before shipping**: 7,427 recorded executions, **4 escalations, and all
+4 already escalated before this change** (`/etc/...`, a `.env` glob). So the new
+rules add ZERO on the corpus - which is the expected result for Windows patterns
+against a Linux corpus, and proves only that they break nothing that has ever
+run. The half that proves they DO something is 27 hand-probed forms, both
+directions, because a clean corpus only says the forms the model happened to
+write were safe.
+
+**A test asserted Windows semantics in a Linux container and had to be fixed** -
+the same shape as yesterday's `os.name` trap. `C:/Users/...` is not absolute on
+Linux, so `config.resolve` reads it as workspace-RELATIVE and the write landed
+"inside". The test now uses a sibling of the temp workspace, which is outside on
+both platforms. Worth knowing on its own: a Windows path string means nothing in
+the container.
+
+1,269 -> 1,296 tests. Three mutations: put `_HOME_PATH` back to the shell
+spellings and 7 go red; remove the Windows delete verbs and 6; remove the Windows
+system roots and 3.
+
+**Not done, deliberately**: widening `AGENT_WORKSPACE` to the whole home
+directory. That converts "asks before writing in your home" into "writes there
+freely", and it is one line in `.env` whenever it is wanted - now on top of
+guardrails that actually fire.
+
 ## A Windows Terminal profile, generated (2026-09-26)
 
 **No agent code touched, no eval** - the TUI and the wizard are on no split.

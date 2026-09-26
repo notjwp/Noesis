@@ -68,7 +68,13 @@ Screen.-bare Button,
 Screen.-bare Button:focus,
 Screen.-bare Button.-error,
 Screen.-bare .row--selected,
-Screen.-bare Input > .input--selection {
+Screen.-bare Input > .input--selection,
+/* Textual paints these itself, so OUR stylesheet never naming them is not the
+   same as them being bare. Measured: RichLog#chat-log resolved to $surface in
+   `bare` while every sibling was #00000000. Invisible on the landing screen,
+   which has no RichLog - so it looked right until a chat opened. */
+Screen.-bare RichLog,
+Screen.-bare DataTable {
     background: transparent;
 }
 
