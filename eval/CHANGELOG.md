@@ -5,6 +5,85 @@ One row per tuning cycle: hypothesis, change, before, after, kept or reverted.
 
 ---
 
+## The `real` split, re-measured with no budget cap (2026-09-26)
+
+**15 of 18, and it is a NEW BASELINE, not a +6.** The harness prints
+`9/18 -> 15/18 (+6)` because it compares against the last recorded pass, and
+that pass ran WITH the per-run token cap that was removed on 2026-09-23
+(NFR-401 amended). The arms differ by exactly the thing those failures were hitting, so
+the delta is not attributable to any code change and the comparison is not one.
+What this pass is: the first `real` rows on the current loop.
+
+| case | now | 2026-09-19, with budgets |
+|---|---|---|
+| `real-click` | 3/3 | 1/3 |
+| `real-markdown` | 3/3 | 3/3 |
+| `real-more-itertools` | 3/3 | 3/3 |
+| `real-cachetools` | 2/3 | 2/3 |
+| `real-humanize` | 2/3 | 0/3 |
+| `real-rich` | 2/3 | 0/3 |
+
+18 scored, 0 blocked, 0 tamper, 0 writes outside the workspace, 5,126,976
+tokens, median 250,097. One `deny` in 368 gate calls: a `finish` on a `markdown`
+run that passed anyway.
+
+**The pre-registered prediction held, and it is the one thing this pass
+establishes.** `rich` and `humanize` had been written up as capability limits
+across four passes - `rich` 0/3 four times running, 26 of its 29 recorded
+failures ending `budget`. The record said the CAP, not the repository. With the
+cap gone, both moved off zero. That was written down before the run, which is
+why it counts.
+
+**What it does not establish**: the median fell 389,942 -> 250,097. Same
+caveat, same reason - a run no longer killed at a token wall spends differently,
+and the case mix moved too. Do not quote 36% as a saving.
+
+### A cap is still binding, and it looks like MAX_TURNS
+
+Five of 18 runs ended at turn 31 or 32 against `MAX_TURNS = 30`, and **three of
+those five PASSED** - the work landed and the run was cut off afterwards, so the
+verdict reads `stuck` over a green check:
+
+| case | turns | compactions | verdict | check |
+|---|---|---|---|---|
+| `real-rich` | 31 | 3 | stuck | PASS |
+| `real-rich` | 32 | 2 | stuck | PASS |
+| `real-rich` | 31 | 2 | stuck | fail |
+| `real-click` | 31 | 3 | stuck | PASS |
+| `real-cachetools` | 31 | 3 | stuck | fail |
+
+Three of the five also sat at `MAX_COMPACTIONS = 3`, so which cap ended them is
+NOT separable from these rows - and one `real-click` run reached 3 compactions
+at 29 turns and still ended `done`, so compaction alone does not decide it.
+
+This is "fixing one premature ending reveals the next" for the fourth time and
+it is a HYPOTHESIS: n=18, one pass. Not tuned here, because that would be a
+second change in a cycle that has none. The next cycle's question is which of
+the two caps is binding, and the rows cannot answer it.
+
+### Rig
+
+The driver died at 13 of 18 when Docker Desktop dropped the container
+(`error waiting for container: unexpected EOF`), and `--continue` picked the run
+up and finished it. **That is the first time `--continue` has ever resumed
+anything** - it sorted run directories by NAME until 2026-09-25, so every resume
+chose `control-20260922-e65d94b` and refused. That fix came from reading the
+code, with no way to exercise it at the time; this pass exercised it.
+
+And the lesson re-paid: I watched the ROW COUNT rather than the driver process,
+so the crash went unnoticed for two hours. Watch the process.
+
+Separately, the documented test count was three short: the suite collects
+**1,348**, of which the container runs 1,346 and skips 2 - the Windows worker
+probes from the NFR-302 fix, which only run on Windows. `1,336 -> 1,345` in the
+entry below undercounted a parametrised case.
+
+### NFR-402 remains unmet
+
+Median 250,097 tokens against the 60,000 ceiling; schema is 49,725 of that
+(20%) at `schema_chars` 7,650. It is the only unmet Definition of Done item and
+nothing here moves it.
+
 ## A chat is named after itself (2026-09-26)
 
 The chat pane's border read `chat · 7c1cacd5`. A thread id is a serial number:

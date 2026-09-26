@@ -10,14 +10,14 @@ table). Read those when you need history; do not copy history back into here.
 ## State
 
 `act -> gate -> execute -> reflect` over a two-provider adapter, a policy gate that is the boundary
-(a kernel-enforced sandbox for scored runs only), CLI and Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,345 offline tests**, green with no API key, no network, a
+(a kernel-enforced sandbox for scored runs only), CLI and Textual TUI, task queue, cron scheduler, email channel, web search, measurement rig. **1,348 offline tests**, green with no API key, no network, a
 read-only root filesystem, and without the `mcp` package installed.
 
 | | |
 |---|---|
 | dev baseline | **15/15**, 3 runs per case, `nvidia/nemotron-3-super-120b-a12b`, at `MAX_TURNS=30`. Re-measured 2026-09-05 after gte-base and extraction-by-default. `add-endpoint` does not flap at the old cap of 12 - it scores **0/3, `stuck` x3**, because its first edit lands on call 13 |
 | held out | **30/30**, re-measured 2026-09-05, `done` x30 and zero tamper. The +1 over 29/30 is `float-division` landing on a good seed, NOT a gain: nothing shipped that day is in the graph's path |
-| real repositories | **9/18** at 3 runs per case (2026-09-19, the second pass that day); three 3-run passes on the same loop code read **10, 11, 9** - FLAT, the spread is the seed. **What those failures WERE, measured by `eval/audit.py` on 2026-09-25: 21 of the 22 in that pass ended `budget`**, the per-run token cap removed on 2026-09-23. `rich` was 0/8 all `budget`, `humanize` 1/9 all `budget`; across all 225 recorded real rows, `budget` plus `compact` is 51% of every failure and `rich` is 26 of 29. So "`rich` 0/3 four passes running" reads as a capability limit and the record says it was the CAP - and there are **zero real rows on the current code**, which is why the next pass is a new baseline rather than a comparison. Do not carry the old interpretation into it. **The token-growth finding was RETRACTED on 2026-09-22**: the control on `e65d94b` (old code, today's endpoint, 12 of 18 rows before the tier blocked) showed the 236k -> 390k comparison was largely CASE MIX - on the same footing, markdown dropped everywhere, 09-12 was already 331k against the control's 381k, and `rich`+`humanize` have cost 404-414k in every pass including 09-12. What is left is the cheap pair, 155k (09-12) against 207k on the same code today with 284k/319k on the new code between them - n=4 vs 6, ordering unclean, not a result. The repository is neither exonerated nor implicated; do not tune on it. **Budgets removed 2026-09-23** (NFR-401 amended), so the next scored pass is a NEW BASELINE, not a comparison with 9/18. Before: 8/12 at 2 runs, twice (2026-09-12), after the compaction bound (4,000 chars, derived from 87 recorded) and the `read_file` floor (100 lines), both kept on pre-registered conditions; five 2-run passes 7, 7, 8, 8, 8 of 12 |
+| real repositories | **15/18** at 3 runs per case (2026-09-26), 0 blocked, 0 tamper, median 250,097 tokens. A **NEW BASELINE, not a +6**: the harness prints `9/18 -> 15/18` against a pass that ran WITH the per-run token cap that was removed on 2026-09-23, so the arms differ by the thing those failures were hitting and the delta is attributable to nothing. Per case: `click` 3/3, `markdown` 3/3, `more-itertools` 3/3, `cachetools` 2/3, `humanize` 2/3, `rich` 2/3. The **pre-registered prediction HELD** and is the one result here: `rich` and `humanize`, written up as capability limits across four passes (`rich` 0/3 four times, 26 of 29 failures ending `budget`), both moved off zero once the cap was gone. The median fall from 389,942 carries the same caveat - do not quote it as a saving. **Open: a cap is still binding.** Five of 18 ended at turn 31/32 against `MAX_TURNS = 30` and THREE OF THOSE FIVE PASSED - work lands, then the run is cut off, so `stuck` sits over a green check. Three of the five were also at `MAX_COMPACTIONS = 3`, and one run compacted 3 times at 29 turns and ended `done`, so the rows cannot say WHICH cap. n=18, one pass: a hypothesis. **The token-growth finding was RETRACTED 2026-09-22** (case mix, not the repository); neither exonerated nor implicated, do not tune on it. Earlier, all with budgets: 9/18 (2026-09-19) with three same-code passes reading 10, 11, 9 - FLAT, the spread is the seed; before that 8/12 at 2 runs twice (2026-09-12), and five 2-run passes 7, 7, 8, 8, 8 of 12 |
 | Definition of Done | **8/9**, audited 2026-09-25 against evidence rather than memory - it read 9/9 while §10 itself had one tick in nine. The audit found NFR-302 broken on Windows and it was FIXED the same day, verified by killing a worker. Unmet: NFR-402 alone (median 68,750 tokens since 09-20 against 60,000; the all-time median is 41,020, so it is a REGRESSION as the toolset grew). Must-have requirements **35/35**; outstanding overall: FR-205 (reverted), FR-503/504 (deliberately unmet), FR-704 `[W]` |
 | search split | **9/9** with `web_search`, **0/9** with it removed |
 | tools split | **9/9** on 2026-09-13, the first sweep, after the two terminal cases were rewritten: `pipeline.py` had a RACE (id announced, then logged; the check read the log, so a driver that stopped the build on the announcement lost with the right answer) and the pair could never be honestly REQUIRED (`python server.py > out.log &` in one `run_shell` leaves a process running too). Now: log before announce, a heartbeat every 2s, one goal sentence - "leave it running" - and a 15s freshness clause in the check. **All six terminal runs chose the pair**; before, 5 of 12 did not. A goal sentence moved the tool choice where a SOUL.md rule (`ask_user`, 2 of 3 unchanged) did not - n=6, a hypothesis. Earlier passes 7, 7, 5, 7 of 9. `ask-environment`: every passing run called `ask_user` then `edit_file`, no failing run did, **15 for 15** |
@@ -266,6 +266,11 @@ Ordered by how often they have caught something.
   resume picked the real-repo control, then refused it. Fixed 2026-09-25 to sort by each
   manifest's own `started`. A resume that refuses is visible; one that appends into the
   wrong baseline would not have been.
+- **Watch the driver PROCESS, not the row count.** Docker Desktop dropped a container
+  mid-pass (`error waiting for container: unexpected EOF`), which killed the harness; the
+  13 rows already on disk kept a row-count waiter satisfied for two hours. A crashed
+  driver and a slow case look identical from the output directory. `--continue` then
+  resumed it and the pass finished, which is the first time that flag has ever worked.
 - **Never pipe the harness through `tail`**, and never wrap it in `timeout`. `tail` buffers until
   exit so a hang looks like progress; `timeout` kills the client but leaves the container running,
   and the orphan corrupts the shared workspace mid-case. Three runs were lost that way. Use
@@ -438,7 +443,8 @@ python eval/audit.py --since 20260923         # only runs on the current code
 scripts/reset.sh <case-id>        # restore /workspace to a fixture's state (idempotent)
 powershell -File scripts/install-tasks.ps1        # run --channel and --worker at logon
 powershell -File scripts/install-tasks.ps1 -Remove
-pytest                            # 1,345 tests, no API key, no network
+pytest                            # 1,348 tests; 2 are the Windows worker probe
+                                  # and skip in the container, so it reports 1,346
 ```
 
 Tests run in the container, which is the measured environment: read-only root, `--network none`,

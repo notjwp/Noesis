@@ -200,15 +200,19 @@ Current numbers, on `nvidia/nemotron-3-super-120b-a12b` at the free tier:
 |---|---|---|
 | dev | bug fixes in small projects | **15/15** |
 | held out | the same, on cases never tuned against | **30/30** |
-| real repositories | six real projects, real bugs | **9/18** |
+| real repositories | six real projects, real bugs | **15/18** |
 | tools | long-running processes, asking the user | **9/9** |
 | search / web | finding things out | **9/9** · **18/18** |
 | memory recall | remembering across sessions | **85.7%** |
 | skills | loading the right procedure | **94.4%** |
 
-The `real` split is the only one with headroom, and it has been flat since early September across
-every loop change since — 10, 11 and 9 of 18 across three runs of the same code — which is recorded
-as flat, not as progress. Two of its six cases have never passed on this model.
+The `real` split is the only one with headroom. Its 15/18 is a **new baseline rather than
+progress**: it was 9/18 in September, but that pass ran with a per-run token cap that has since been
+removed, and 21 of those 22 failures ended by hitting it — so the two arms differ by the thing the
+failures were made of, and the gap is not attributable to any change in the agent. What the pass
+does show is a prediction written down beforehand coming true: the two cases that had never passed
+on this model were the two whose recorded failures were all cap, and both now pass 2 of 3. A cap is
+still binding — three runs passed their tests and were then cut off at the turn limit.
 
 ## Running the evaluation
 
@@ -222,7 +226,8 @@ place Docker is needed.
 ```bash
 docker build -f Containerfile -t personal-agent .
 
-# 1,345 offline tests - no API key, no network
+# 1,348 offline tests - no API key, no network. The two Windows
+# worker probes skip here, so the container reports 1,346
 docker run --rm --network none --read-only --tmpfs /tmp:exec \
   -v "$PWD:/app:ro" -v "$PWD/eval/workspace:/workspace" \
   -v "$PWD/.agent/homes/_t:/state" personal-agent python -m pytest -q
